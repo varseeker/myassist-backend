@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoleType {
+  ADMIN
+  QA
+  DEVELOPER
+  USER
+}
+
+enum TicketType {
+  BUG_REPORT
+  ISSUE_REPORT
+  ENHANCEMENT_REQUEST
+  SUPPORT_REQUEST
+}
+
+enum TicketStatus {
+  OPEN
+  USER_INPUT
+  QA_REVIEW
+  ASSIGNED
+  IN_PROGRESS
+  WAITING_INFORMATION
+  RESOLVED
+  REOPENED
+  CLOSED
+  REJECTED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum NotificationType {
+  TICKET_CREATED
+  TICKET_ASSIGNED
+  TICKET_STATUS_CHANGED
+  TICKET_COMMENTED
+  TICKET_MENTIONED
+  SYSTEM
+}
+
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        RoleType  @unique
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  fullName     String    @map("full_name")
+  avatarUrl    String?   @map("avatar_url")
+  isActive     Boolean   @default(true) @map("is_active")
+  roleId       String    @map("role_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  role                  Role               @relation(fields: [roleId], references: [id])
+  userProjects          UserProject[]
+  createdTickets        Ticket[]           @relation("TicketCreator")
+  assignedTickets       Ticket[]           @relation("TicketAssignee")
+  comments              TicketComment[]
+  attachments           TicketAttachment[]
+  ticketHistories       TicketHistory[]
+  notifications         Notification[]
+  refreshTokens         RefreshToken[]
+  passwordResetTokens   PasswordResetToken[]
+
+  @@index([roleId])
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique
+  userId    String   @map("user_id") @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model Ticket {
+  id           String         @id @default(uuid()) @db.Uuid
+  ticketNumber String         @unique @map("ticket_number")
+  title        String
+  description  String         @db.Text
+  type         TicketType
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(MEDIUM)
+  projectId    String         @map("project_id") @db.Uuid
+  sprintId     String?        @map("sprint_id") @db.Uuid
+  createdById  String         @map("created_by_id") @db.Uuid
+  assignedToId String?        @map("assigned_to_id") @db.Uuid
+  resolvedAt   DateTime?      @map("resolved_at")
+  closedAt     DateTime?      @map("closed_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  deletedAt    DateTime?      @map("deleted_at")
+
+  project     Project            @relation(fields: [projectId], references: [id])
+  sprint      Sprint?            @relation(fields: [sprintId], references: [id])
+  createdBy   User               @relation("TicketCreator", fields: [createdById], references: [id])
+  assignedTo  User?              @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  comments    TicketComment[]
+  attachments TicketAttachment[]
+  histories   TicketHistory[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([type])
+  @@index([projectId])
+  @@index([sprintId])
+  @@index([createdById])
+  @@index([assignedToId])
+  @@index([createdAt])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id        String    @id @default(uuid()) @db.Uuid
+  ticketId  String    @map("ticket_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  content   String    @db.Text
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
+  @@map("ticket_comments")
+}
+
+model TicketAttachment {
+  id           String    @id @default(uuid()) @db.Uuid
+  ticketId     String    @map("ticket_id") @db.Uuid
+  uploadedById String    @map("uploaded_by_id") @db.Uuid
+  fileName     String    @map("file_name")
+  filePath     String    @map("file_path")
+  fileSize     Int       @map("file_size")
+  mimeType     String    @map("mime_type")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploadedBy User   @relation(fields: [uploadedById], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_attachments")
+}
+
+model TicketHistory {
+  id          String        @id @default(uuid()) @db.Uuid
+  ticketId    String        @map("ticket_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  action      String
+  fromStatus  TicketStatus? @map("from_status")
+  toStatus    TicketStatus? @map("to_status")
+  metadata    Json?
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("ticket_histories")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model Project {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  code        String    @unique
+  description String?   @db.Text
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  sprints      Sprint[]
+  userProjects UserProject[]
+  tickets      Ticket[]
+
+  @@index([isActive])
+  @@map("projects")
+}
+
+model Sprint {
+  id        String    @id @default(uuid()) @db.Uuid
+  projectId String    @map("project_id") @db.Uuid
+  name      String
+  goal      String?   @db.Text
+  startDate DateTime  @map("start_date")
+  endDate   DateTime  @map("end_date")
+  isActive  Boolean   @default(false) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  project Project  @relation(fields: [projectId], references: [id])
+  tickets Ticket[]
+
+  @@index([projectId])
+  @@index([isActive])
+  @@map("sprints")
+}
+
+model UserProject {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
+  @@map("user_projects")
+}

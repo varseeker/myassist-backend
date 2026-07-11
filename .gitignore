@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+generated/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Local uploads (when STORAGE_DRIVER=local)
+uploads/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma (generated client lives in node_modules)
+# Keep migrations tracked; ignore local DB files if any
+*.db
+*.db-journal
