@@ -26,10 +26,11 @@ COPY prisma ./prisma/
 COPY prisma.config.ts ./
 
 RUN npm ci --omit=dev
+RUN npm install prisma --no-save
 RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
 
 EXPOSE 3001
 
-CMD ["node", "dist/src/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]

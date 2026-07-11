@@ -46,7 +46,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('docs', app, document);
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   console.log(`MyAssist API running on http://localhost:${port}/${apiPrefix}`);
   console.log(`Swagger docs: http://localhost:${port}/docs`);
