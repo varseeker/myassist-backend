@@ -25,7 +25,7 @@ git push -u origin main
 4. Jika pakai **Blueprint**, Render membaca `render.yaml` otomatis
 5. Jika manual:
    - **Runtime:** Node
-   - **Build Command:** `npm install && npx prisma generate && npm run build && npx prisma migrate deploy`
+   - **Build Command:** `npm install --include=dev && npx prisma generate && npm run build && npx prisma migrate deploy`
    - **Start Command:** `npm run start:prod`
    - **Health Check Path:** `/api/v1/health`
    - **Region:** Singapore (dekat Supabase `ap-southeast-1`)
@@ -84,6 +84,7 @@ npx prisma db seed
 
 | Masalah | Solusi |
 |---------|--------|
+| Build gagal `nest: not found` | `NODE_ENV=production` skip devDeps — pakai `npm install --include=dev` di build command |
 | Build gagal Prisma | Pastikan `DATABASE_URL` & `DIRECT_URL` sudah di-set |
 | Bucket not found | Pastikan `SUPABASE_SERVICE_ROLE_KEY` valid; bucket dibuat otomatis saat startup |
 | CORS error | Update `CORS_ORIGIN` dengan URL frontend yang benar |
