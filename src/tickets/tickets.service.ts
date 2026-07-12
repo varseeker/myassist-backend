@@ -45,6 +45,7 @@ import {
   buildTicketScopeWhere,
 } from './ticket-scope.util';
 import { getUserProjectIds } from '../projects/project-scope.util';
+import { resolveTicketStatusFilter } from './ticket-status-groups';
 
 type TicketWithRelations = Prisma.TicketGetPayload<{
   include: {
@@ -726,9 +727,14 @@ export class TicketsService {
       currentUser.role,
     );
 
+    const statusFilter = resolveTicketStatusFilter({
+      status: query.status,
+      statusGroup: query.statusGroup,
+    });
+
     const where: Prisma.TicketWhereInput = {
       ...buildTicketScopeWhere(currentUser, projectIds),
-      ...(query.status ? { status: query.status } : {}),
+      ...(statusFilter ? { status: statusFilter } : {}),
       ...(query.priority ? { priority: query.priority } : {}),
       ...(query.type ? { type: query.type } : {}),
       ...(query.projectId ? { projectId: query.projectId } : {}),

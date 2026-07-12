@@ -9,21 +9,12 @@ import { AuthenticatedUser } from '../auth/interfaces/auth.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildTicketScopeWhere } from '../tickets/ticket-scope.util';
 import { getUserProjectIds } from '../projects/project-scope.util';
+import { TICKET_STATUS_GROUPS } from '../tickets/ticket-status-groups';
 import { DashboardResponseDto } from './dto/dashboard-response.dto';
 
-const OPEN_STATUSES: TicketStatus[] = [
-  'OPEN',
-  'USER_INPUT',
-  'QA_REVIEW',
-  'REOPENED',
-];
-const IN_PROGRESS_STATUSES: TicketStatus[] = [
-  'ASSIGNED',
-  'IN_PROGRESS',
-  'WAITING_INFORMATION',
-  'DONE',
-];
-const CLOSED_STATUSES: TicketStatus[] = ['CLOSED', 'REJECTED'];
+const OPEN_STATUSES = TICKET_STATUS_GROUPS.open;
+const IN_PROGRESS_STATUSES = TICKET_STATUS_GROUPS.in_progress;
+const CLOSED_STATUSES = TICKET_STATUS_GROUPS.closed;
 
 const ALL_STATUSES = Object.values(TicketStatus);
 const ALL_PRIORITIES = Object.values(TicketPriority);

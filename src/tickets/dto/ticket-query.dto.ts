@@ -6,12 +6,22 @@ import {
 } from '@prisma/client';
 import { IsEnum, IsIn, IsOptional, IsUUID } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
+import { TICKET_STATUS_GROUP_KEYS } from '../ticket-status-groups';
 
 export class TicketQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({ enum: TicketStatus })
   @IsOptional()
   @IsEnum(TicketStatus)
   status?: TicketStatus;
+
+  @ApiPropertyOptional({
+    description:
+      'Dashboard-aligned status group. Ignored when `status` is provided.',
+    enum: TICKET_STATUS_GROUP_KEYS,
+  })
+  @IsOptional()
+  @IsIn([...TICKET_STATUS_GROUP_KEYS])
+  statusGroup?: (typeof TICKET_STATUS_GROUP_KEYS)[number];
 
   @ApiPropertyOptional({ enum: TicketPriority })
   @IsOptional()
