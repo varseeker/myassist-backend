@@ -7,7 +7,7 @@ import {
   MessagingRecipient,
   OutboundMessage,
 } from '../messaging.types';
-import { formatOutboundText } from '../messaging.utils';
+import { formatTelegramHtml } from '../messaging.utils';
 
 @Injectable()
 export class TelegramChannel extends BaseMessagingChannel {
@@ -43,15 +43,24 @@ export class TelegramChannel extends BaseMessagingChannel {
       return {
         channel: this.channel,
         status: 'SKIPPED',
-        error: 'Telegram channel disabled or missing TELEGRAM_BOT_TOKEN',
+        error:
+          'Channel Telegram nonaktif atau TELEGRAM_BOT_TOKEN belum diisi di environment backend.',
       };
     }
 
-    if (!recipient.telegramEnabled || !recipient.telegramChatId) {
+    if (!recipient.telegramEnabled) {
       return {
         channel: this.channel,
         status: 'SKIPPED',
-        error: 'Recipient has no telegram chat id or telegram disabled',
+        error: `Telegram dinonaktifkan untuk ${recipient.fullName}. Aktifkan di form Users.`,
+      };
+    }
+
+    if (!recipient.telegramChatId) {
+      return {
+        channel: this.channel,
+        status: 'SKIPPED',
+        error: `${recipient.fullName} belum menautkan Telegram. Minta user buka link Telegram dari halaman Users → Start bot.`,
       };
     }
 
@@ -61,51 +70,92 @@ export class TelegramChannel extends BaseMessagingChannel {
         ? `${frontendUrl.replace(/\/$/, '')}/tickets/${message.ticketId}`
         : undefined;
 
-    const text = formatOutboundText(message.title, message.body, link).replace(
-      /\*/g,
-      '',
-    );
+    const text = formatTelegramHtml(message.title, message.body, link);
 
     try {
       await this.apiCall('sendMessage', {
         chat_id: recipient.telegramChatId,
         text,
+        parse_mode: 'HTML',
         disable_web_page_preview: false,
       });
 
       return { channel: this.channel, status: 'SENT' };
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Telegram send failed';
-      this.logger.warn(`Telegram send failed for ${recipient.userId}: ${errorMessage}`);
-      return {
-        channel: this.channel,
-        status: 'FAILED',
-        error: errorMessage,
-      };
+      // Fallback plain text if HTML parse fails
+      try {
+        const plain = `${message.title}\n\n${message.body}${link ? `\n\n${link}` : ''}`;
+        await this.apiCall('sendMessage', {
+          chat_id: recipient.telegramChatId,
+          text: plain,
+          disable_web_page_preview: false,
+        });
+        return { channel: this.channel, status: 'SENT' };
+      } catch (fallbackError) {
+        const errorMessage = this.describeSendError(fallbackError ?? error);
+        this.logger.warn(
+          `Telegram send failed for ${recipient.userId}: ${errorMessage}`,
+        );
+        return {
+          channel: this.channel,
+          status: 'FAILED',
+          error: `Gagal kirim Telegram ke ${recipient.fullName} (chat ${recipient.telegramChatId}): ${errorMessage}`,
+        };
+      }
     }
   }
 
-  async apiCall(method: string, body: Record<string, unknown>): Promise<unknown> {
-    const token = this.getBotToken();
-    if (!token) {
-      throw new Error('TELEGRAM_BOT_TOKEN is not configured');
+  private describeSendError(error: unknown): string {
+    if (!(error instanceof Error)) {
+      return 'Kesalahan tidak dikenal dari Telegram API';
     }
 
-    const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const message = error.message;
+    if (/bot was blocked/i.test(message)) {
+      return 'User memblokir bot. Minta user unblock @bot lalu Start lagi.';
+    }
+    if (/chat not found/i.test(message)) {
+      return 'Chat tidak ditemukan. User perlu buka ulang link tautan Telegram.';
+    }
+    if (/unauthorized/i.test(message)) {
+      return 'Token bot tidak valid. Periksa TELEGRAM_BOT_TOKEN.';
+    }
+    return message;
+  }
+
+  async apiCall(method: string, body?: Record<string, unknown>): Promise<unknown> {
+    const token = this.getBotToken();
+    if (!token) {
+      throw new Error(
+        'TELEGRAM_BOT_TOKEN belum dikonfigurasi. Isi di .env backend lalu restart.',
+      );
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body ?? {}),
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Tidak bisa menghubungi Telegram API: ${detail}`);
+    }
 
     const payload = (await response.json()) as {
       ok: boolean;
       description?: string;
+      error_code?: number;
       result?: unknown;
     };
 
     if (!payload.ok) {
-      throw new Error(payload.description ?? `Telegram API ${method} failed`);
+      throw new Error(
+        payload.description
+          ? `Telegram API ${method} gagal (${payload.error_code ?? response.status}): ${payload.description}`
+          : `Telegram API ${method} gagal dengan status HTTP ${response.status}`,
+      );
     }
 
     return payload.result;

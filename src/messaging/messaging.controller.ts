@@ -9,12 +9,16 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import type { AuthenticatedUser } from '../auth/interfaces/auth.interface';
 import {
+  ConnectWhatsAppDto,
   DisconnectWhatsAppDto,
   MessagingStatusDto,
+  MessagingTestResultDto,
   WhatsAppSessionStatusDto,
 } from './dto/messaging-status.dto';
 import { MessagingService } from './messaging.service';
@@ -29,10 +33,10 @@ export class MessagingController {
   @UseGuards(RolesGuard)
   @Roles(RoleType.ADMIN)
   @ApiOperation({ summary: 'Get WhatsApp + Telegram messaging status' })
-  getStatus(): MessagingStatusDto {
+  async getStatus(): Promise<MessagingStatusDto> {
     return {
       whatsapp: this.messagingService.getWhatsAppStatus(),
-      telegram: this.messagingService.getTelegramStatus(),
+      telegram: await this.messagingService.getTelegramStatus(),
     };
   }
 
@@ -40,9 +44,15 @@ export class MessagingController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(RoleType.ADMIN)
-  @ApiOperation({ summary: 'Start / reconnect Baileys WhatsApp session' })
-  connectWhatsApp(): Promise<WhatsAppSessionStatusDto> {
-    return this.messagingService.connectWhatsApp();
+  @ApiOperation({
+    summary: 'Start / reconnect Baileys WhatsApp session (optionally reset QR)',
+  })
+  connectWhatsApp(
+    @Body() dto: ConnectWhatsAppDto,
+  ): Promise<WhatsAppSessionStatusDto> {
+    return this.messagingService.connectWhatsApp({
+      resetSession: Boolean(dto.resetSession),
+    });
   }
 
   @Post('whatsapp/disconnect')
@@ -56,11 +66,36 @@ export class MessagingController {
     return this.messagingService.disconnectWhatsApp(Boolean(dto.logout));
   }
 
+  @Post('test')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(RoleType.ADMIN)
+  @ApiOperation({
+    summary: 'Send a test notification to the current admin via WhatsApp + Telegram',
+  })
+  async sendTest(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<MessagingTestResultDto> {
+    const result = await this.messagingService.sendTestNotification(user.id);
+    return {
+      whatsapp: result.whatsapp
+        ? { status: result.whatsapp.status, error: result.whatsapp.error }
+        : null,
+      telegram: result.telegram
+        ? { status: result.telegram.status, error: result.telegram.error }
+        : null,
+    };
+  }
+
   @Public()
   @Post('telegram/webhook')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Telegram bot webhook (link accounts via /start token)' })
-  async telegramWebhook(@Body() body: Record<string, unknown>): Promise<{ ok: true }> {
+  @ApiOperation({
+    summary: 'Telegram bot webhook (link accounts via /start token)',
+  })
+  async telegramWebhook(
+    @Body() body: Record<string, unknown>,
+  ): Promise<{ ok: true }> {
     await this.messagingService.handleTelegramUpdate(
       body as {
         message?: {

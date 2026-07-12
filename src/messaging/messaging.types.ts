@@ -41,12 +41,21 @@ export interface MessagingChannelDriver {
   ): Promise<ChannelSendResult>;
 }
 
+export type WhatsAppConnectionStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'qr'
+  | 'connected'
+  | 'logged_out'
+  | 'disabled';
+
 export interface WhatsAppSessionStatus {
   driver: 'baileys' | 'meta' | 'off';
   connected: boolean;
-  status: 'disconnected' | 'connecting' | 'qr' | 'connected' | 'disabled';
+  status: WhatsAppConnectionStatus;
   phoneNumber?: string | null;
   qrDataUrl?: string | null;
   lastError?: string | null;
+  hint?: string | null;
   updatedAt: string;
 }

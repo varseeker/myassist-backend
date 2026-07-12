@@ -9,9 +9,22 @@ export class WhatsAppSessionStatusDto {
   connected!: boolean;
 
   @ApiProperty({
-    enum: ['disconnected', 'connecting', 'qr', 'connected', 'disabled'],
+    enum: [
+      'disconnected',
+      'connecting',
+      'qr',
+      'connected',
+      'logged_out',
+      'disabled',
+    ],
   })
-  status!: 'disconnected' | 'connecting' | 'qr' | 'connected' | 'disabled';
+  status!:
+    | 'disconnected'
+    | 'connecting'
+    | 'qr'
+    | 'connected'
+    | 'logged_out'
+    | 'disabled';
 
   @ApiPropertyOptional({ nullable: true })
   phoneNumber?: string | null;
@@ -21,6 +34,9 @@ export class WhatsAppSessionStatusDto {
 
   @ApiPropertyOptional({ nullable: true })
   lastError?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  hint?: string | null;
 
   @ApiProperty()
   updatedAt!: string;
@@ -35,6 +51,15 @@ export class TelegramStatusDto {
 
   @ApiPropertyOptional({ nullable: true })
   deepLinkPrefix?: string | null;
+
+  @ApiProperty({ enum: ['polling', 'webhook', 'disabled'] })
+  ingressMode!: 'polling' | 'webhook' | 'disabled';
+
+  @ApiProperty()
+  linkedUsers!: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  hint?: string | null;
 }
 
 export class MessagingStatusDto {
@@ -45,6 +70,16 @@ export class MessagingStatusDto {
   telegram!: TelegramStatusDto;
 }
 
+export class ConnectWhatsAppDto {
+  @ApiPropertyOptional({
+    description:
+      'Clear Baileys credentials and generate a fresh QR (use after logout / bad session)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  resetSession?: boolean;
+}
+
 export class DisconnectWhatsAppDto {
   @ApiPropertyOptional({
     description: 'If true, logout and clear Baileys session credentials',
@@ -52,4 +87,18 @@ export class DisconnectWhatsAppDto {
   @IsOptional()
   @IsBoolean()
   logout?: boolean;
+}
+
+export class MessagingTestResultDto {
+  @ApiPropertyOptional({ nullable: true })
+  whatsapp?: {
+    status: string;
+    error?: string;
+  } | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  telegram?: {
+    status: string;
+    error?: string;
+  } | null;
 }

@@ -29,12 +29,15 @@ export class NotificationsDispatchService {
       managedById: ticket.managedById,
     });
 
+    const title = 'Tiket baru dibuat';
+    const message = `${ticket.ticketNumber} — ${ticket.title}\nStatus awal: menunggu penanganan.`;
+
     await this.createAndEmit(
       recipientIds.map((userId) => ({
         userId,
         type: NotificationType.TICKET_CREATED,
-        title: 'New ticket created',
-        message: `${ticket.ticketNumber}: ${ticket.title}`,
+        title,
+        message,
         data: {
           ticketId: ticket.id,
           ticketNumber: ticket.ticketNumber,
@@ -43,8 +46,8 @@ export class NotificationsDispatchService {
     );
 
     await this.messagingService.notifyUsers(recipientIds, {
-      title: 'New ticket created',
-      body: `${ticket.ticketNumber}: ${ticket.title}`,
+      title,
+      body: message,
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
     });
@@ -68,12 +71,15 @@ export class NotificationsDispatchService {
     });
 
     if (toStatus === 'ASSIGNED' && effectiveAssignee) {
+      const title = 'Tiket ditugaskan kepada Anda';
+      const message = `${ticket.ticketNumber} — ${ticket.title}\nStatus: ${fromStatus} → ASSIGNED. Segera kerjakan tiket ini.`;
+
       await this.createAndEmit([
         {
           userId: effectiveAssignee,
           type: NotificationType.TICKET_ASSIGNED,
-          title: 'Ticket assigned to you',
-          message: `${ticket.ticketNumber}: ${ticket.title}`,
+          title,
+          message,
           data: {
             ticketId: ticket.id,
             ticketNumber: ticket.ticketNumber,
@@ -82,8 +88,8 @@ export class NotificationsDispatchService {
       ]);
 
       await this.messagingService.notifyUsers([effectiveAssignee], {
-        title: 'Ticket assigned to you',
-        body: `${ticket.ticketNumber}: ${ticket.title}`,
+        title,
+        body: message,
         ticketId: ticket.id,
         ticketNumber: ticket.ticketNumber,
       });
@@ -94,12 +100,15 @@ export class NotificationsDispatchService {
     );
 
     if (statusRecipients.length > 0) {
+      const title = 'Status tiket diperbarui';
+      const message = `${ticket.ticketNumber} — ${ticket.title}\nPerubahan status: ${fromStatus} → ${toStatus}`;
+
       await this.createAndEmit(
         statusRecipients.map((userId) => ({
           userId,
           type: NotificationType.TICKET_STATUS_CHANGED,
-          title: 'Ticket status updated',
-          message: `${ticket.ticketNumber} moved from ${fromStatus} to ${toStatus}`,
+          title,
+          message,
           data: {
             ticketId: ticket.id,
             ticketNumber: ticket.ticketNumber,
@@ -110,8 +119,8 @@ export class NotificationsDispatchService {
       );
 
       await this.messagingService.notifyUsers(statusRecipients, {
-        title: 'Ticket status updated',
-        body: `${ticket.ticketNumber} moved from ${fromStatus} to ${toStatus}`,
+        title,
+        body: message,
         ticketId: ticket.id,
         ticketNumber: ticket.ticketNumber,
         metadata: { fromStatus, toStatus },
@@ -131,12 +140,15 @@ export class NotificationsDispatchService {
 
     if (mentionSet.size > 0) {
       const mentionIds = [...mentionSet];
+      const title = 'Anda disebut di komentar tiket';
+      const message = `${ticket.ticketNumber} — ${ticket.title}\nSeseorang menyebut Anda di komentar. Buka tiket untuk membalas.`;
+
       await this.createAndEmit(
         mentionIds.map((userId) => ({
           userId,
           type: NotificationType.TICKET_MENTIONED,
-          title: 'You were mentioned',
-          message: `You were mentioned on ${ticket.ticketNumber}`,
+          title,
+          message,
           data: {
             ticketId: ticket.id,
             ticketNumber: ticket.ticketNumber,
@@ -146,8 +158,8 @@ export class NotificationsDispatchService {
       );
 
       await this.messagingService.notifyUsers(mentionIds, {
-        title: 'You were mentioned',
-        body: `You were mentioned on ${ticket.ticketNumber}`,
+        title,
+        body: message,
         ticketId: ticket.id,
         ticketNumber: ticket.ticketNumber,
       });
@@ -167,12 +179,15 @@ export class NotificationsDispatchService {
       return;
     }
 
+    const title = 'Komentar baru pada tiket';
+    const message = `${ticket.ticketNumber} — ${ticket.title}\nAda komentar baru. Buka tiket untuk membaca detailnya.`;
+
     await this.createAndEmit(
       participantIds.map((userId) => ({
         userId,
         type: NotificationType.TICKET_COMMENTED,
-        title: 'New comment on ticket',
-        message: `New comment on ${ticket.ticketNumber}`,
+        title,
+        message,
         data: {
           ticketId: ticket.id,
           ticketNumber: ticket.ticketNumber,
@@ -182,8 +197,8 @@ export class NotificationsDispatchService {
     );
 
     await this.messagingService.notifyUsers(participantIds, {
-      title: 'New comment on ticket',
-      body: `New comment on ${ticket.ticketNumber}`,
+      title,
+      body: message,
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
     });
