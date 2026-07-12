@@ -42,7 +42,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login with email and password' })
+  @ApiOperation({ summary: 'Login with username and password' })
   login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,

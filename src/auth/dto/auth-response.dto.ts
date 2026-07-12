@@ -19,6 +19,9 @@ export class AuthUserDto {
   @ApiProperty()
   id!: string;
 
+  @ApiProperty({ example: 'admin' })
+  username!: string;
+
   @ApiProperty()
   email!: string;
 

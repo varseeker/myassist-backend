@@ -22,6 +22,7 @@ import {
   hashToken,
   parseExpiresIn,
 } from './utils/token.util';
+import { normalizeUsername } from '../common/utils/username.util';
 
 @Injectable()
 export class AuthService {
@@ -43,7 +44,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, res: Response) {
-    const user = await this.validateUser(dto.email, dto.password);
+    const user = await this.validateUser(dto.username, dto.password);
     const tokens = await this.issueTokens(user, res);
 
     return tokens;
@@ -94,6 +95,7 @@ export class AuthService {
 
     const authenticatedUser: AuthenticatedUser = {
       id: user.id,
+      username: user.username,
       email: user.email,
       fullName: user.fullName,
       roleId: user.roleId,
@@ -204,27 +206,35 @@ export class AuthService {
     return { message: 'Password reset successfully' };
   }
 
-  private async validateUser(email: string, password: string) {
+  private async validateUser(username: string, password: string) {
+    let normalizedUsername: string;
+    try {
+      normalizedUsername = normalizeUsername(username);
+    } catch {
+      throw new UnauthorizedException('Username atau password salah');
+    }
+
     const user = await this.prisma.user.findFirst({
       where: {
-        email: email.toLowerCase(),
+        username: normalizedUsername,
         deletedAt: null,
       },
       include: { role: true },
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Username atau password salah');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Username atau password salah');
     }
 
     return {
       id: user.id,
+      username: user.username,
       email: user.email,
       fullName: user.fullName,
       roleId: user.roleId,
@@ -236,6 +246,7 @@ export class AuthService {
   private async issueTokens(user: AuthenticatedUser, res: Response) {
     const payload: JwtPayload = {
       sub: user.id,
+      username: user.username,
       email: user.email,
       role: user.role,
     };
@@ -285,6 +296,7 @@ export class AuthService {
 
   private mapUser(user: {
     id: string;
+    username: string;
     email: string;
     fullName: string;
     roleId: string;
@@ -302,6 +314,7 @@ export class AuthService {
   }) {
     return {
       id: user.id,
+      username: user.username,
       email: user.email,
       fullName: user.fullName,
       roleId: user.roleId,

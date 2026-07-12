@@ -14,6 +14,7 @@ const roles: { name: RoleType; description: string }[] = [
 
 const defaultUsers = [
   {
+    username: 'admin',
     email: 'admin@myassist.local',
     password: 'Admin123!',
     fullName: 'System Admin',
@@ -21,6 +22,7 @@ const defaultUsers = [
     projectIds: [] as string[],
   },
   {
+    username: 'qa',
     email: 'qa@myassist.local',
     password: 'Qa123456!',
     fullName: 'QA Tester',
@@ -28,6 +30,7 @@ const defaultUsers = [
     projectIds: [] as string[],
   },
   {
+    username: 'dev',
     email: 'dev@myassist.local',
     password: 'Dev123456!',
     fullName: 'Developer User',
@@ -35,6 +38,7 @@ const defaultUsers = [
     projectIds: [] as string[],
   },
   {
+    username: 'user',
     email: 'user@myassist.local',
     password: 'User123456!',
     fullName: 'Regular User',
@@ -93,6 +97,7 @@ async function main() {
     const savedUser = await prisma.user.upsert({
       where: { email: user.email },
       update: {
+        username: user.username,
         fullName: user.fullName,
         passwordHash,
         roleId: role.id,
@@ -100,6 +105,7 @@ async function main() {
         deletedAt: null,
       },
       create: {
+        username: user.username,
         email: user.email,
         fullName: user.fullName,
         passwordHash,
@@ -132,7 +138,7 @@ async function main() {
   console.log('Seeded active sprint:', sprint.name);
   console.log(
     'Seeded users:',
-    defaultUsers.map((u) => `${u.email} (${u.role})`).join(', '),
+    defaultUsers.map((u) => `${u.username} / ${u.email} (${u.role})`).join(', '),
   );
 }
 

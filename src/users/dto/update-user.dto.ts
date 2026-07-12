@@ -8,10 +8,22 @@ import {
   IsString,
   IsUrl,
   IsUUID,
+  Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 
 export class UpdateUserDto {
+  @ApiPropertyOptional({ example: 'johndoe' })
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(32)
+  @Matches(/^[a-zA-Z0-9._]+$/, {
+    message: 'Username may only contain letters, numbers, dots, and underscores',
+  })
+  username?: string;
+
   @ApiPropertyOptional({ example: 'John Doe' })
   @IsOptional()
   @IsString()

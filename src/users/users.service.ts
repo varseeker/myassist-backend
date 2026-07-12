@@ -11,6 +11,7 @@ import {
   PaginatedResult,
 } from '../common/dto/pagination.dto';
 import { createTelegramLinkToken, normalizePhoneNumber } from '../messaging/messaging.utils';
+import { normalizeUsername } from '../common/utils/username.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -30,6 +31,7 @@ export class UsersService {
     'createdAt',
     'fullName',
     'email',
+    'username',
     'updatedAt',
   ]);
 
@@ -53,6 +55,9 @@ export class UsersService {
             OR: [
               {
                 email: { contains: query.search, mode: 'insensitive' },
+              },
+              {
+                username: { contains: query.search, mode: 'insensitive' },
               },
               {
                 fullName: { contains: query.search, mode: 'insensitive' },
@@ -91,12 +96,20 @@ export class UsersService {
 
   async create(dto: CreateUserDto): Promise<UserResponseDto> {
     const email = dto.email.toLowerCase();
+    const username = normalizeUsername(dto.username);
+
     const existingUser = await this.prisma.user.findFirst({
-      where: { email, deletedAt: null },
+      where: {
+        deletedAt: null,
+        OR: [{ email }, { username }],
+      },
     });
 
     if (existingUser) {
-      throw new ConflictException('Email is already registered');
+      if (existingUser.email === email) {
+        throw new ConflictException('Email is already registered');
+      }
+      throw new ConflictException('Username is already taken');
     }
 
     const role = await this.prisma.role.findFirst({
@@ -115,6 +128,7 @@ export class UsersService {
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
+          username,
           email,
           passwordHash,
           fullName: dto.fullName,
@@ -169,6 +183,22 @@ export class UsersService {
     }
 
     const data: Prisma.UserUpdateInput = {};
+
+    if (dto.username !== undefined) {
+      const username = normalizeUsername(dto.username);
+      const taken = await this.prisma.user.findFirst({
+        where: {
+          username,
+          deletedAt: null,
+          NOT: { id },
+        },
+        select: { id: true },
+      });
+      if (taken) {
+        throw new ConflictException('Username is already taken');
+      }
+      data.username = username;
+    }
 
     if (dto.fullName !== undefined) {
       data.fullName = dto.fullName;
@@ -377,6 +407,7 @@ export class UsersService {
   private mapUser(user: UserWithRole): UserResponseDto {
     return {
       id: user.id,
+      username: user.username,
       email: user.email,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,

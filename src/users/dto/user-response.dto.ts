@@ -20,6 +20,9 @@ export class UserResponseDto {
   @ApiProperty()
   id!: string;
 
+  @ApiProperty({ example: 'johndoe' })
+  username!: string;
+
   @ApiProperty()
   email!: string;
 
