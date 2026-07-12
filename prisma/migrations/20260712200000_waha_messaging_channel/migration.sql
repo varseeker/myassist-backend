@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "MessagingChannel" ADD VALUE IF NOT EXISTS 'WHATSAPP_WAHA';

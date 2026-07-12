@@ -98,8 +98,13 @@ npx prisma db seed
 |----------|---------|
 | `FRONTEND_URL` | URL Vercel frontend (link di pesan) |
 | `MESSAGING_WHATSAPP_DRIVER` | `baileys` (default) / `meta` (future) / `off` |
-| `BAILEYS_AUTH_PATH` | Default `.baileys-auth` |
+| `BAILEYS_AUTH_PATH` | Default `.baileys-auth` (butuh disk persist di Render) |
 | `BAILEYS_AUTO_CONNECT` | `true` / `false` |
+| `WHATSAPP_MIN_INTERVAL_MS` | Jeda minimum antar kirim (default `5000`) |
+| `WHATSAPP_JITTER_MS` | Random ekstra jeda (default `2000`) |
+| `WHATSAPP_PER_RECIPIENT_COOLDOWN_MS` | Cooldown per nomor (default `90000`) |
+| `WHATSAPP_MAX_PER_HOUR` | Cap per jam (default `25`) |
+| `WHATSAPP_MAX_PER_DAY` | Cap per hari (default `120`) |
 | `MESSAGING_TELEGRAM_ENABLED` | `true` / `false` |
 | `TELEGRAM_BOT_TOKEN` | Dari @BotFather |
 | `TELEGRAM_BOT_USERNAME` | Username bot tanpa `@` |
@@ -110,4 +115,4 @@ Set Telegram webhook setelah deploy:
 curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<APP_URL>/api/v1/messaging/telegram/webhook"
 ```
 
-Admin scan QR di halaman frontend **Messaging**. Baileys unofficial — untuk jangka panjang, ganti ke Meta Cloud API lewat `MESSAGING_WHATSAPP_DRIVER=meta`.
+Admin scan QR di halaman frontend **Messaging**. Kiriman WhatsApp diantre + dibatasi agar tidak mudah dianggap spam. Baileys unofficial — tetap ada risiko restrict dari WhatsApp.

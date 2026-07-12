@@ -150,7 +150,7 @@ export class TicketsService {
       dto,
       currentUser,
     );
-    const ticketNumber = await this.generateTicketNumber();
+    const ticketNumber = await this.generateTicketNumber(projectId, sprintId);
     const isUserSubmission = currentUser.role === RoleType.USER;
 
     const ticket = await this.prisma.$transaction(async (tx) => {
@@ -229,6 +229,15 @@ export class TicketsService {
       if (dto.sprintId) {
         await this.validateSprintForProject(dto.sprintId, ticket.projectId);
         data.sprint = { connect: { id: dto.sprintId } };
+
+        // Refresh ticket number when sprint is first assigned (CODE-SPRINT-seq)
+        if (!ticket.sprintId || ticket.sprintId !== dto.sprintId) {
+          data.ticketNumber = await this.generateTicketNumber(
+            ticket.projectId,
+            dto.sprintId,
+            ticket.id,
+          );
+        }
       } else {
         data.sprint = { disconnect: true };
       }
@@ -296,8 +305,14 @@ export class TicketsService {
       );
     }
 
+    let assigneeName: string | null = null;
     if (dto.assignedToId) {
       await this.validateAssignee(dto.assignedToId, ticket.projectId);
+      const assignee = await this.prisma.user.findFirst({
+        where: { id: dto.assignedToId },
+        select: { fullName: true },
+      });
+      assigneeName = assignee?.fullName ?? null;
     }
 
     let mentionUser: {
@@ -383,6 +398,9 @@ export class TicketsService {
           metadata: {
             note: dto.note,
             assignedToId: dto.assignedToId,
+            assignedToName: assigneeName,
+            actorName: currentUser.fullName,
+            actorRole: currentUser.role,
             mentionUserId: dto.mentionUserId,
             mentionUserName: mentionUser?.fullName,
           },
@@ -504,6 +522,48 @@ export class TicketsService {
       fullName: member.fullName,
       email: member.email ?? '',
     }));
+  }
+
+  async getReporters(
+    currentUser: AuthenticatedUser,
+  ): Promise<AssigneeResponseDto[]> {
+    const projectIds = await getUserProjectIds(
+      this.prisma,
+      currentUser.id,
+      currentUser.role,
+    );
+
+    const tickets = await this.prisma.ticket.findMany({
+      where: {
+        deletedAt: null,
+        ...(projectIds !== 'all' ? { projectId: { in: projectIds } } : {}),
+      },
+      select: {
+        createdById: true,
+        createdBy: {
+          select: { id: true, fullName: true, email: true },
+        },
+      },
+    });
+
+    const byId = new Map<
+      string,
+      { id: string; fullName: string; email: string }
+    >();
+
+    for (const ticket of tickets) {
+      if (!byId.has(ticket.createdById)) {
+        byId.set(ticket.createdById, {
+          id: ticket.createdBy.id,
+          fullName: ticket.createdBy.fullName,
+          email: ticket.createdBy.email ?? '',
+        });
+      }
+    }
+
+    return [...byId.values()].sort((a, b) =>
+      a.fullName.localeCompare(b.fullName),
+    );
   }
 
   async exportBySprint(
@@ -835,17 +895,62 @@ export class TicketsService {
     }
   }
 
-  private async generateTicketNumber(): Promise<string> {
+  private async generateTicketNumber(
+    projectId: string,
+    sprintId: string | null,
+    excludeTicketId?: string,
+  ): Promise<string> {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, deletedAt: null },
+      select: { code: true },
+    });
+
+    if (!project) {
+      throw new BadRequestException('Project not found');
+    }
+
+    const projectCode = project.code.trim().toUpperCase().replace(/\s+/g, '');
+    let sprintKey = '0';
+
+    if (sprintId) {
+      const sprint = await this.prisma.sprint.findFirst({
+        where: { id: sprintId, deletedAt: null },
+        select: { name: true },
+      });
+      sprintKey = this.resolveSprintKey(sprint?.name ?? null);
+    }
+
+    const prefix = `${projectCode}-${sprintKey}-`;
+
     const lastTicket = await this.prisma.ticket.findFirst({
-      orderBy: { createdAt: 'desc' },
+      where: {
+        ticketNumber: { startsWith: prefix },
+        ...(excludeTicketId ? { id: { not: excludeTicketId } } : {}),
+      },
+      orderBy: { ticketNumber: 'desc' },
       select: { ticketNumber: true },
     });
 
-    const lastNumber = lastTicket
-      ? Number.parseInt(lastTicket.ticketNumber.replace('MYA-', ''), 10)
+    const lastSeq = lastTicket
+      ? Number.parseInt(lastTicket.ticketNumber.slice(prefix.length), 10)
       : 0;
+    const nextSeq = Number.isFinite(lastSeq) ? lastSeq + 1 : 1;
 
-    return `MYA-${String(lastNumber + 1).padStart(6, '0')}`;
+    return `${prefix}${String(nextSeq).padStart(7, '0')}`;
+  }
+
+  private resolveSprintKey(sprintName: string | null): string {
+    if (!sprintName?.trim()) {
+      return '0';
+    }
+
+    const match = sprintName.match(/(\d+)/);
+    if (match?.[1]) {
+      return match[1];
+    }
+
+    const sanitized = sprintName.replace(/[^\w]+/g, '').toUpperCase();
+    return sanitized.slice(0, 8) || '0';
   }
 
   private mapUserSummary(

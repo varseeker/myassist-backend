@@ -11,9 +11,9 @@ import {
   RoleType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { BaileysWhatsAppChannel } from './channels/baileys-whatsapp.channel';
 import { MetaWhatsAppChannel } from './channels/meta-whatsapp.channel';
 import { TelegramChannel } from './channels/telegram.channel';
+import { BaileysWhatsAppChannel } from './channels/baileys-whatsapp.channel';
 import {
   ChannelSendResult,
   MessagingChannelDriver,
@@ -51,7 +51,7 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  getWhatsAppStatus(): WhatsAppSessionStatus {
+  async getWhatsAppStatus(): Promise<WhatsAppSessionStatus> {
     if (this.metaChannel.isEnabled()) {
       return {
         driver: 'meta',
@@ -349,7 +349,9 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
     const [whatsapp, telegram] = await Promise.all([
       this.baileysChannel.isEnabled()
         ? this.baileysChannel.send(recipient, message)
-        : Promise.resolve(null),
+        : this.metaChannel.isEnabled()
+          ? this.metaChannel.send(recipient, message)
+          : Promise.resolve(null),
       this.telegramChannel.isEnabled()
         ? this.telegramChannel.send(recipient, message)
         : Promise.resolve(null),

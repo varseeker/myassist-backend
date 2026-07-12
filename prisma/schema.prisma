@@ -65,6 +65,7 @@ model Role {
 
 enum MessagingChannel {
   WHATSAPP_BAILEYS
+  WHATSAPP_WAHA
   TELEGRAM
   WHATSAPP_META
 }

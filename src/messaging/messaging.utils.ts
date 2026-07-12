@@ -27,6 +27,12 @@ export function toWhatsAppJid(phoneNumber: string): string | null {
   return normalized ? `${normalized}@s.whatsapp.net` : null;
 }
 
+/** WAHA chatId format: international digits + @c.us */
+export function toWahaChatId(phoneNumber: string): string | null {
+  const normalized = normalizePhoneNumber(phoneNumber);
+  return normalized ? `${normalized}@c.us` : null;
+}
+
 export interface MessageLinks {
   appUrl?: string;
   ticketUrl?: string;

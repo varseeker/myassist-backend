@@ -70,6 +70,14 @@ export class TicketsController {
     return this.ticketsService.getProjectMembers(projectId);
   }
 
+  @Get('reporters')
+  @ApiOperation({ summary: 'List ticket reporters available for filtering' })
+  getReporters(
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<AssigneeResponseDto[]> {
+    return this.ticketsService.getReporters(currentUser);
+  }
+
   @Get('export')
   @Roles(RoleType.ADMIN, RoleType.QA, RoleType.DEVELOPER)
   @ApiOperation({ summary: 'Export tickets for a sprint as CSV or Excel' })

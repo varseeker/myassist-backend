@@ -35,7 +35,7 @@ export class MessagingController {
   @ApiOperation({ summary: 'Get WhatsApp + Telegram messaging status' })
   async getStatus(): Promise<MessagingStatusDto> {
     return {
-      whatsapp: this.messagingService.getWhatsAppStatus(),
+      whatsapp: await this.messagingService.getWhatsAppStatus(),
       telegram: await this.messagingService.getTelegramStatus(),
     };
   }
