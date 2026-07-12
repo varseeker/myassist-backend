@@ -85,7 +85,7 @@ export function formatTelegramHtml(
   const parts = [
     '<b>MyAssist — Notifikasi Tiket</b>',
     '',
-    `📌 <b>${escape(title)}</b>`,
+    `<b>${escape(title)}</b>`,
     escape(body),
   ];
 
