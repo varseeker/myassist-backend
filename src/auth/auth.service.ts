@@ -297,7 +297,7 @@ export class AuthService {
   private mapUser(user: {
     id: string;
     username: string;
-    email: string;
+    email: string | null;
     fullName: string;
     roleId: string;
     isActive: boolean;

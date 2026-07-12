@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   Prisma,
@@ -11,6 +12,7 @@ import {
   TicketStatus,
   TicketType,
 } from '@prisma/client';
+import ExcelJS from 'exceljs';
 import {
   buildPaginatedResult,
   PaginatedResult,
@@ -19,6 +21,10 @@ import { AuthenticatedUser } from '../auth/interfaces/auth.interface';
 import { NotificationsDispatchService } from '../notifications/notifications-dispatch.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import {
+  TicketExportFormat,
+  TicketExportQueryDto,
+} from './dto/ticket-export-query.dto';
 import { TicketQueryDto } from './dto/ticket-query.dto';
 import {
   AssigneeResponseDto,
@@ -420,7 +426,149 @@ export class TicketsService {
       orderBy: { fullName: 'asc' },
     });
 
-    return developers;
+    return developers.map((developer) => ({
+      id: developer.id,
+      fullName: developer.fullName,
+      email: developer.email ?? '',
+    }));
+  }
+
+  async exportBySprint(
+    query: TicketExportQueryDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<{ filename: string; contentType: string; file: StreamableFile }> {
+    const sprint = await this.prisma.sprint.findFirst({
+      where: { id: query.sprintId, deletedAt: null },
+      include: {
+        project: {
+          select: { id: true, name: true, code: true, deletedAt: true },
+        },
+      },
+    });
+
+    if (!sprint || sprint.project.deletedAt) {
+      throw new NotFoundException('Sprint not found');
+    }
+
+    const listQuery: TicketQueryDto = {
+      sprintId: query.sprintId,
+      projectId: sprint.projectId,
+      page: 1,
+      limit: 10_000,
+      sortBy: 'createdAt',
+      sortOrder: 'asc',
+      scope: currentUser.role === RoleType.DEVELOPER ? 'all' : undefined,
+    };
+
+    const where = await this.buildListWhere(listQuery, currentUser);
+
+    const tickets = await this.prisma.ticket.findMany({
+      where,
+      include: {
+        project: true,
+        sprint: true,
+        createdBy: { include: { role: true } },
+        assignedTo: { include: { role: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const rows = tickets.map((ticket) => ({
+      ticketNumber: ticket.ticketNumber,
+      title: ticket.title,
+      project: ticket.project.name,
+      kode: ticket.project.code,
+      sprint: ticket.sprint?.name ?? '',
+      tipe: ticket.type,
+      status: ticket.status,
+      deskripsi: ticket.description,
+      reporter: ticket.createdBy.fullName,
+      assignee: ticket.assignedTo?.fullName ?? '',
+      lastUpdate: ticket.updatedAt.toISOString(),
+    }));
+
+    const safeSprint = sprint.name.replace(/[^\w.-]+/g, '_');
+    const safeProject = sprint.project.code.replace(/[^\w.-]+/g, '_');
+    const format = query.format ?? TicketExportFormat.CSV;
+    const stamp = new Date().toISOString().slice(0, 10);
+
+    if (format === TicketExportFormat.XLSX) {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'MyAssist';
+      const sheet = workbook.addWorksheet('Tickets');
+      sheet.columns = [
+        { header: 'Ticket Number', key: 'ticketNumber', width: 16 },
+        { header: 'Title', key: 'title', width: 28 },
+        { header: 'Project', key: 'project', width: 22 },
+        { header: 'Kode', key: 'kode', width: 12 },
+        { header: 'Sprint', key: 'sprint', width: 16 },
+        { header: 'Tipe', key: 'tipe', width: 18 },
+        { header: 'Status', key: 'status', width: 18 },
+        { header: 'Deskripsi', key: 'deskripsi', width: 40 },
+        { header: 'Reporter', key: 'reporter', width: 20 },
+        { header: 'Assignee', key: 'assignee', width: 20 },
+        { header: 'Last Update', key: 'lastUpdate', width: 24 },
+      ];
+      sheet.getRow(1).font = { bold: true };
+      sheet.addRows(rows);
+
+      const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+      return {
+        filename: `tickets_${safeProject}_${safeSprint}_${stamp}.xlsx`,
+        contentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        file: new StreamableFile(buffer),
+      };
+    }
+
+    const headers = [
+      'Ticket Number',
+      'Title',
+      'Project',
+      'Kode',
+      'Sprint',
+      'Tipe',
+      'Status',
+      'Deskripsi',
+      'Reporter',
+      'Assignee',
+      'Last Update',
+    ];
+
+    const csvLines = [
+      headers.join(','),
+      ...rows.map((row) =>
+        [
+          row.ticketNumber,
+          row.title,
+          row.project,
+          row.kode,
+          row.sprint,
+          row.tipe,
+          row.status,
+          row.deskripsi,
+          row.reporter,
+          row.assignee,
+          row.lastUpdate,
+        ]
+          .map((value) => this.escapeCsv(String(value ?? '')))
+          .join(','),
+      ),
+    ];
+
+    const csv = `\uFEFF${csvLines.join('\n')}`;
+    return {
+      filename: `tickets_${safeProject}_${safeSprint}_${stamp}.csv`,
+      contentType: 'text/csv; charset=utf-8',
+      file: new StreamableFile(Buffer.from(csv, 'utf8')),
+    };
+  }
+
+  private escapeCsv(value: string): string {
+    if (/[",\n\r]/.test(value)) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+    return value;
   }
 
   private async buildListWhere(
@@ -620,13 +768,18 @@ export class TicketsService {
   }
 
   private mapUserSummary(
-    user: Prisma.UserGetPayload<{ include: { role: true } }>,
+    user: {
+      id: string;
+      fullName: string;
+      email: string | null;
+      role?: { name: RoleType };
+    },
   ): TicketUserSummaryDto {
     return {
       id: user.id,
       fullName: user.fullName,
-      email: user.email,
-      role: user.role.name,
+      email: user.email ?? '',
+      role: user.role!.name,
     };
   }
 

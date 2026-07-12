@@ -10,17 +10,22 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiProduces,
   ApiTags,
 } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
+import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/auth.interface';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { TicketExportQueryDto } from './dto/ticket-export-query.dto';
 import { TicketQueryDto } from './dto/ticket-query.dto';
 import {
   AssigneeResponseDto,
@@ -54,6 +59,27 @@ export class TicketsController {
     @Query('projectId') projectId?: string,
   ): Promise<AssigneeResponseDto[]> {
     return this.ticketsService.getAssignees(projectId);
+  }
+
+  @Get('export')
+  @Roles(RoleType.ADMIN, RoleType.QA, RoleType.DEVELOPER)
+  @ApiOperation({ summary: 'Export tickets for a sprint as CSV or Excel' })
+  @ApiProduces(
+    'text/csv',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  async exportBySprint(
+    @Query() query: TicketExportQueryDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const result = await this.ticketsService.exportBySprint(query, currentUser);
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${result.filename}"`,
+    );
+    return result.file;
   }
 
   @Get(':id')

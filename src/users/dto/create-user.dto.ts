@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
@@ -13,6 +14,7 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateUserDto {
@@ -26,9 +28,14 @@ export class CreateUserDto {
   })
   username!: string;
 
-  @ApiProperty({ example: 'john@myassist.local' })
+  @ApiPropertyOptional({ example: 'john@myassist.local' })
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  )
+  @ValidateIf((_, value) => value !== undefined && value !== null)
   @IsEmail()
-  email!: string;
+  email?: string;
 
   @ApiProperty({ minLength: 8, example: 'Password123!' })
   @IsString()

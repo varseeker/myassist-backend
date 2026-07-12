@@ -1,8 +1,10 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsEmail,
   IsEnum,
   IsOptional,
   IsString,
@@ -11,6 +13,7 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateUserDto {
@@ -23,6 +26,18 @@ export class UpdateUserDto {
     message: 'Username may only contain letters, numbers, dots, and underscores',
   })
   username?: string;
+
+  @ApiPropertyOptional({
+    example: 'john@myassist.local',
+    description: 'Optional. Send empty string to clear email.',
+  })
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' && value.trim() === '' ? null : value,
+  )
+  @ValidateIf((_, value) => value !== undefined && value !== null)
+  @IsEmail()
+  email?: string | null;
 
   @ApiPropertyOptional({ example: 'John Doe' })
   @IsOptional()

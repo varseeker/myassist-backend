@@ -9,8 +9,8 @@ export class AttachmentUserDto {
   @ApiProperty()
   fullName!: string;
 
-  @ApiProperty()
-  email!: string;
+  @ApiProperty({ nullable: true, type: String })
+  email!: string | null;
 
   @ApiProperty({ enum: RoleType })
   role!: RoleType;

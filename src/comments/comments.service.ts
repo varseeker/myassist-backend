@@ -204,6 +204,7 @@ export class CommentsService {
     const where: Prisma.UserWhereInput = {
       deletedAt: null,
       isActive: true,
+      email: { not: null },
       id: { not: currentUser.id },
       ...(search
         ? {
@@ -230,6 +231,7 @@ export class CommentsService {
       where: {
         deletedAt: null,
         isActive: true,
+        email: { not: null },
         id: { not: currentUser.id },
         AND: [
           {
@@ -347,7 +349,10 @@ export class CommentsService {
     });
 
     const usersByEmail = new Map(
-      users.map((user) => [user.email.toLowerCase(), this.mapUser(user)]),
+      users.map((user) => [
+        (user.email ?? '').toLowerCase(),
+        this.mapUser(user),
+      ]),
     );
 
     const result = new Map<string, CommentUserDto[]>();
@@ -370,7 +375,7 @@ export class CommentsService {
     return {
       id: user.id,
       fullName: user.fullName,
-      email: user.email,
+      email: user.email ?? '',
       role: user.role.name,
     };
   }

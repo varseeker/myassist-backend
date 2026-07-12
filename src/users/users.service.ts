@@ -95,18 +95,21 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto): Promise<UserResponseDto> {
-    const email = dto.email.toLowerCase();
+    const email = dto.email?.trim() ? dto.email.trim().toLowerCase() : null;
     const username = normalizeUsername(dto.username);
 
     const existingUser = await this.prisma.user.findFirst({
       where: {
         deletedAt: null,
-        OR: [{ email }, { username }],
+        OR: [
+          { username },
+          ...(email ? [{ email }] : []),
+        ],
       },
     });
 
     if (existingUser) {
-      if (existingUser.email === email) {
+      if (email && existingUser.email === email) {
         throw new ConflictException('Email is already registered');
       }
       throw new ConflictException('Username is already taken');
@@ -198,6 +201,29 @@ export class UsersService {
         throw new ConflictException('Username is already taken');
       }
       data.username = username;
+    }
+
+    if (dto.email !== undefined) {
+      const email =
+        dto.email === null || dto.email.trim() === ''
+          ? null
+          : dto.email.trim().toLowerCase();
+
+      if (email) {
+        const taken = await this.prisma.user.findFirst({
+          where: {
+            email,
+            deletedAt: null,
+            NOT: { id },
+          },
+          select: { id: true },
+        });
+        if (taken) {
+          throw new ConflictException('Email is already registered');
+        }
+      }
+
+      data.email = email;
     }
 
     if (dto.fullName !== undefined) {

@@ -14,8 +14,8 @@ export class TicketUserSummaryDto {
   @ApiProperty()
   fullName!: string;
 
-  @ApiProperty()
-  email!: string;
+  @ApiProperty({ nullable: true, type: String })
+  email!: string | null;
 
   @ApiProperty({ enum: RoleType })
   role!: RoleType;
@@ -148,6 +148,6 @@ export class AssigneeResponseDto {
   @ApiProperty()
   fullName!: string;
 
-  @ApiProperty()
-  email!: string;
+  @ApiProperty({ nullable: true, type: String })
+  email!: string | null;
 }

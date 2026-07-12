@@ -52,19 +52,14 @@ export function formatOutboundText(
   body: string,
   links: MessageLinks = {},
 ): string {
-  const parts = [
-    '*MyAssist — Notifikasi Tiket*',
-    '',
-    `📌 ${title}`,
-    body,
-  ];
+  const parts = ['*MyAssist — Notifikasi Tiket*', '', `${title}`, body];
 
   if (links.ticketUrl) {
-    parts.push('', `🔗 Buka tiket: ${links.ticketUrl}`);
+    parts.push('', `Buka tiket: ${links.ticketUrl}`);
   }
 
   if (links.appUrl) {
-    parts.push('', `🌐 Web MyAssist: ${links.appUrl}`);
+    parts.push('', `Web MyAssist: ${links.appUrl}`);
   }
 
   parts.push('', '_Pesan otomatis dari MyAssist. Jangan balas ke chat ini._');
@@ -77,10 +72,7 @@ export function formatTelegramHtml(
   links: MessageLinks = {},
 ): string {
   const escape = (value: string) =>
-    value
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   const parts = [
     '<b>MyAssist — Notifikasi Tiket</b>',
@@ -105,5 +97,7 @@ export function formatTelegramHtml(
 }
 
 export function createTelegramLinkToken(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  return (
+    Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
+  );
 }

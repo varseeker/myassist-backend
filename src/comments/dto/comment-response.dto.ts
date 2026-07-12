@@ -9,8 +9,8 @@ export class CommentUserDto {
   @ApiProperty()
   fullName!: string;
 
-  @ApiProperty()
-  email!: string;
+  @ApiProperty({ nullable: true, type: String })
+  email!: string | null;
 
   @ApiProperty({ enum: RoleType })
   role!: RoleType;
@@ -59,6 +59,6 @@ export class MentionableUserDto {
   @ApiProperty()
   fullName!: string;
 
-  @ApiProperty()
-  email!: string;
+  @ApiProperty({ nullable: true, type: String })
+  email!: string | null;
 }
