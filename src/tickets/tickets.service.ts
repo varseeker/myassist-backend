@@ -306,13 +306,26 @@ export class TicketsService {
     }
 
     let assigneeName: string | null = null;
+    const effectiveAssigneeId =
+      dto.assignedToId ??
+      (nextStatus === TicketStatus.ASSIGNED ? ticket.assignedToId : null);
+
     if (dto.assignedToId) {
       await this.validateAssignee(dto.assignedToId, ticket.projectId);
+    }
+
+    if (effectiveAssigneeId) {
       const assignee = await this.prisma.user.findFirst({
-        where: { id: dto.assignedToId },
+        where: { id: effectiveAssigneeId, deletedAt: null },
         select: { fullName: true },
       });
       assigneeName = assignee?.fullName ?? null;
+    }
+
+    if (nextStatus === TicketStatus.ASSIGNED && !assigneeName) {
+      throw new BadRequestException(
+        'Assignee name could not be resolved for ASSIGNED status',
+      );
     }
 
     let mentionUser: {
@@ -397,7 +410,7 @@ export class TicketsService {
           toStatus: nextStatus,
           metadata: {
             note: dto.note,
-            assignedToId: dto.assignedToId,
+            assignedToId: effectiveAssigneeId ?? dto.assignedToId,
             assignedToName: assigneeName,
             actorName: currentUser.fullName,
             actorRole: currentUser.role,
