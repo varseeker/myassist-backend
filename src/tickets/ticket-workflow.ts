@@ -6,6 +6,8 @@ export interface TicketAccessContext {
   status: TicketStatus;
   createdById: string;
   assignedToId: string | null;
+  projectId: string;
+  verificationUserId?: string | null;
 }
 
 const TERMINAL_STATUSES = new Set<TicketStatus>(['CLOSED', 'REJECTED']);
@@ -31,7 +33,7 @@ const TRANSITIONS: Record<
   },
   IN_PROGRESS: {
     WAITING_INFORMATION: [RoleType.DEVELOPER, RoleType.QA, RoleType.ADMIN],
-    RESOLVED: [RoleType.DEVELOPER, RoleType.ADMIN],
+    DONE: [RoleType.DEVELOPER, RoleType.ADMIN],
   },
   WAITING_INFORMATION: {
     IN_PROGRESS: [
@@ -41,9 +43,13 @@ const TRANSITIONS: Record<
       RoleType.ADMIN,
     ],
   },
+  DONE: {
+    RESOLVED: [RoleType.QA, RoleType.ADMIN],
+    IN_PROGRESS: [RoleType.QA, RoleType.ADMIN],
+  },
   RESOLVED: {
-    CLOSED: [RoleType.QA, RoleType.ADMIN],
-    REOPENED: [RoleType.QA, RoleType.ADMIN, RoleType.USER],
+    CLOSED: [RoleType.USER, RoleType.QA, RoleType.ADMIN],
+    REOPENED: [RoleType.USER, RoleType.QA, RoleType.ADMIN],
   },
   REOPENED: {
     QA_REVIEW: [RoleType.QA, RoleType.ADMIN],
@@ -58,24 +64,22 @@ export function canViewTicket(
   role: RoleType,
   userId: string,
   ticket: TicketAccessContext,
+  projectIds: string[] | 'all',
 ): boolean {
-  if (role === RoleType.ADMIN || role === RoleType.QA) {
+  if (role === RoleType.ADMIN || projectIds === 'all') {
     return true;
   }
 
-  if (role === RoleType.DEVELOPER) {
-    return ticket.assignedToId === userId;
-  }
-
-  return ticket.createdById === userId;
+  return projectIds.includes(ticket.projectId);
 }
 
 export function assertCanViewTicket(
   role: RoleType,
   userId: string,
   ticket: TicketAccessContext,
+  projectIds: string[] | 'all',
 ): void {
-  if (!canViewTicket(role, userId, ticket)) {
+  if (!canViewTicket(role, userId, ticket, projectIds)) {
     throw new ForbiddenException('You do not have access to this ticket');
   }
 }
@@ -98,8 +102,9 @@ export function canTransitionStatus(
 
   if (
     role === RoleType.USER &&
-    nextStatus === 'REOPENED' &&
-    ticket.createdById !== userId
+    (nextStatus === 'REOPENED' || nextStatus === 'CLOSED') &&
+    ticket.createdById !== userId &&
+    ticket.verificationUserId !== userId
   ) {
     return false;
   }
@@ -114,7 +119,7 @@ export function canTransitionStatus(
 
   if (
     role === RoleType.DEVELOPER &&
-    ['IN_PROGRESS', 'WAITING_INFORMATION', 'RESOLVED'].includes(nextStatus) &&
+    ['IN_PROGRESS', 'WAITING_INFORMATION', 'DONE'].includes(nextStatus) &&
     ticket.assignedToId !== userId
   ) {
     return false;
@@ -168,7 +173,9 @@ export function getAvailableTransitions(
   userId: string,
   ticket: TicketAccessContext,
 ): TicketStatus[] {
-  const candidates = Object.keys(TRANSITIONS[ticket.status] ?? {}) as TicketStatus[];
+  const candidates = Object.keys(
+    TRANSITIONS[ticket.status] ?? {},
+  ) as TicketStatus[];
 
   return candidates.filter((status) =>
     canTransitionStatus(role, userId, ticket, status),

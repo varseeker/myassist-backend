@@ -27,6 +27,7 @@ enum TicketStatus {
   ASSIGNED
   IN_PROGRESS
   WAITING_INFORMATION
+  DONE
   RESOLVED
   REOPENED
   CLOSED
@@ -98,6 +99,7 @@ model User {
   createdTickets        Ticket[]           @relation("TicketCreator")
   assignedTickets       Ticket[]           @relation("TicketAssignee")
   managedTickets        Ticket[]           @relation("TicketManager")
+  verificationTickets   Ticket[]           @relation("TicketVerifier")
   comments              TicketComment[]
   attachments           TicketAttachment[]
   ticketHistories       TicketHistory[]
@@ -154,6 +156,7 @@ model Ticket {
   createdById  String         @map("created_by_id") @db.Uuid
   assignedToId String?        @map("assigned_to_id") @db.Uuid
   managedById  String?        @map("managed_by_id") @db.Uuid
+  verificationUserId String?  @map("verification_user_id") @db.Uuid
   resolvedAt   DateTime?      @map("resolved_at")
   closedAt     DateTime?      @map("closed_at")
   createdAt    DateTime       @default(now()) @map("created_at")
@@ -165,6 +168,7 @@ model Ticket {
   createdBy   User               @relation("TicketCreator", fields: [createdById], references: [id])
   assignedTo  User?              @relation("TicketAssignee", fields: [assignedToId], references: [id])
   managedBy   User?              @relation("TicketManager", fields: [managedById], references: [id])
+  verificationUser User?         @relation("TicketVerifier", fields: [verificationUserId], references: [id])
   comments    TicketComment[]
   attachments TicketAttachment[]
   histories   TicketHistory[]
@@ -177,6 +181,7 @@ model Ticket {
   @@index([createdById])
   @@index([assignedToId])
   @@index([managedById])
+  @@index([verificationUserId])
   @@index([createdAt])
   @@map("tickets")
 }

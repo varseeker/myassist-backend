@@ -38,7 +38,7 @@ export function buildProjectFilter(
 }
 
 export function buildTicketProjectScope(
-  currentUser: AuthenticatedUser,
+  _currentUser: AuthenticatedUser,
   projectIds: ProjectScope,
 ): Prisma.TicketWhereInput {
   const base: Prisma.TicketWhereInput = {
@@ -49,26 +49,10 @@ export function buildTicketProjectScope(
     base.projectId = { in: projectIds };
   }
 
-  if (currentUser.role === RoleType.ADMIN) {
-    return base;
-  }
-
-  if (currentUser.role === RoleType.QA) {
-    return base;
-  }
-
-  if (currentUser.role === RoleType.DEVELOPER) {
-    return {
-      ...base,
-      assignedToId: currentUser.id,
-    };
-  }
-
-  return {
-    ...base,
-    createdById: currentUser.id,
-  };
+  // All project members can see every ticket in their assigned projects.
+  return base;
 }
+
 
 export async function assertUserHasProjectAccess(
   prisma: PrismaService,

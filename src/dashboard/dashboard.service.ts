@@ -21,6 +21,7 @@ const IN_PROGRESS_STATUSES: TicketStatus[] = [
   'ASSIGNED',
   'IN_PROGRESS',
   'WAITING_INFORMATION',
+  'DONE',
 ];
 const CLOSED_STATUSES: TicketStatus[] = ['CLOSED', 'REJECTED'];
 

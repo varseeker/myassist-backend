@@ -79,6 +79,9 @@ export class TicketResponseDto {
   assignedToId?: string | null;
 
   @ApiPropertyOptional()
+  verificationUserId?: string | null;
+
+  @ApiPropertyOptional()
   resolvedAt?: string | null;
 
   @ApiPropertyOptional()
@@ -95,6 +98,9 @@ export class TicketResponseDto {
 
   @ApiPropertyOptional({ type: TicketUserSummaryDto })
   assignedTo?: TicketUserSummaryDto | null;
+
+  @ApiPropertyOptional({ type: TicketUserSummaryDto })
+  verificationUser?: TicketUserSummaryDto | null;
 
   @ApiPropertyOptional({ enum: TicketStatus, isArray: true })
   availableTransitions?: TicketStatus[];

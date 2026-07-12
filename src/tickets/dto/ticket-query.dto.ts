@@ -1,11 +1,10 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   TicketPriority,
   TicketStatus,
   TicketType,
 } from '@prisma/client';
-import { Transform } from 'class-transformer';
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { IsEnum, IsIn, IsOptional, IsUUID } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 export class TicketQueryDto extends PaginationQueryDto {
@@ -45,10 +44,11 @@ export class TicketQueryDto extends PaginationQueryDto {
   sprintId?: string;
 
   @ApiPropertyOptional({
-    description: 'Filter by scope: mine (default for USER/DEVELOPER) or all',
+    description:
+      'Optional filter: mine (own/assigned tickets) or all project tickets (default)',
     enum: ['mine', 'all'],
   })
   @IsOptional()
-  @Transform(({ value }) => (value === 'all' ? 'all' : 'mine'))
+  @IsIn(['mine', 'all'])
   scope?: 'mine' | 'all';
 }

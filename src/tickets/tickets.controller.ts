@@ -61,6 +61,15 @@ export class TicketsController {
     return this.ticketsService.getAssignees(projectId);
   }
 
+  @Get('project-members')
+  @Roles(RoleType.ADMIN, RoleType.QA, RoleType.DEVELOPER, RoleType.USER)
+  @ApiOperation({ summary: 'List project members for verification mention' })
+  getProjectMembers(
+    @Query('projectId', ParseUUIDPipe) projectId: string,
+  ): Promise<AssigneeResponseDto[]> {
+    return this.ticketsService.getProjectMembers(projectId);
+  }
+
   @Get('export')
   @Roles(RoleType.ADMIN, RoleType.QA, RoleType.DEVELOPER)
   @ApiOperation({ summary: 'Export tickets for a sprint as CSV or Excel' })

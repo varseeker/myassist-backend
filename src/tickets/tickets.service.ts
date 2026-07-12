@@ -37,17 +37,20 @@ import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import {
   assertCanTransitionStatus,
-  assertCanViewTicket,
   canEditTicketDetails,
   getAvailableTransitions,
 } from './ticket-workflow';
-import { buildTicketScopeWhere } from './ticket-scope.util';
+import {
+  assertTicketVisibleToUser,
+  buildTicketScopeWhere,
+} from './ticket-scope.util';
 import { getUserProjectIds } from '../projects/project-scope.util';
 
 type TicketWithRelations = Prisma.TicketGetPayload<{
   include: {
     createdBy: { include: { role: true } };
     assignedTo: { include: { role: true } };
+    verificationUser: { include: { role: true } };
     project: true;
     sprint: true;
   };
@@ -64,6 +67,7 @@ const userSummaryInclude = {
 const ticketInclude = {
   createdBy: { include: userSummaryInclude },
   assignedTo: { include: userSummaryInclude },
+  verificationUser: { include: userSummaryInclude },
   project: true,
   sprint: true,
 } as const;
@@ -124,7 +128,7 @@ export class TicketsService {
     currentUser: AuthenticatedUser,
   ): Promise<TicketDetailResponseDto> {
     const ticket = await this.findTicketOrThrow(id);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const histories = await this.prisma.ticketHistory.findMany({
       where: { ticketId: id },
@@ -190,7 +194,7 @@ export class TicketsService {
     currentUser: AuthenticatedUser,
   ): Promise<TicketResponseDto> {
     const ticket = await this.findTicketOrThrow(id);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     if (!canEditTicketDetails(currentUser.role, currentUser.id, ticket)) {
       throw new ForbiddenException('You cannot edit this ticket');
@@ -269,7 +273,7 @@ export class TicketsService {
     currentUser: AuthenticatedUser,
   ): Promise<TicketResponseDto> {
     const ticket = await this.findTicketOrThrow(id);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const nextStatus = dto.status;
     const accessTicket = {
@@ -286,8 +290,27 @@ export class TicketsService {
       );
     }
 
+    if (nextStatus === TicketStatus.RESOLVED && !dto.mentionUserId) {
+      throw new BadRequestException(
+        'mentionUserId is required when moving to RESOLVED — pilih user untuk uji ulang',
+      );
+    }
+
     if (dto.assignedToId) {
       await this.validateAssignee(dto.assignedToId, ticket.projectId);
+    }
+
+    let mentionUser: {
+      id: string;
+      fullName: string;
+      email: string | null;
+    } | null = null;
+
+    if (dto.mentionUserId) {
+      mentionUser = await this.validateMentionUser(
+        dto.mentionUserId,
+        ticket.projectId,
+      );
     }
 
     if (
@@ -323,7 +346,8 @@ export class TicketsService {
       data.managedBy = { connect: { id: currentUser.id } };
     }
 
-    if (nextStatus === TicketStatus.RESOLVED) {
+    if (nextStatus === TicketStatus.RESOLVED && dto.mentionUserId) {
+      data.verificationUser = { connect: { id: dto.mentionUserId } };
       data.resolvedAt = now;
     }
 
@@ -334,6 +358,12 @@ export class TicketsService {
     if (nextStatus === TicketStatus.REOPENED) {
       data.resolvedAt = null;
       data.closedAt = null;
+      data.verificationUser = { disconnect: true };
+    }
+
+    if (nextStatus === TicketStatus.IN_PROGRESS && ticket.status === TicketStatus.DONE) {
+      data.resolvedAt = null;
+      data.verificationUser = { disconnect: true };
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -353,9 +383,24 @@ export class TicketsService {
           metadata: {
             note: dto.note,
             assignedToId: dto.assignedToId,
+            mentionUserId: dto.mentionUserId,
+            mentionUserName: mentionUser?.fullName,
           },
         },
       });
+
+      if (nextStatus === TicketStatus.RESOLVED && mentionUser) {
+        const mentionTag = mentionUser.email
+          ? `@${mentionUser.email}`
+          : `@${mentionUser.fullName}`;
+        await tx.ticketComment.create({
+          data: {
+            ticketId: id,
+            userId: currentUser.id,
+            content: `${mentionTag} mohon uji ulang tiket ini setelah perbaikan. Catatan QA: ${dto.note}`,
+          },
+        });
+      }
 
       return result;
     });
@@ -367,6 +412,7 @@ export class TicketsService {
         nextStatus,
         currentUser.id,
         dto.assignedToId,
+        dto.mentionUserId,
       )
       .catch(() => undefined);
 
@@ -433,6 +479,33 @@ export class TicketsService {
     }));
   }
 
+  async getProjectMembers(projectId: string): Promise<AssigneeResponseDto[]> {
+    const members = await this.prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        userProjects: {
+          some: {
+            projectId,
+            project: { deletedAt: null, isActive: true },
+          },
+        },
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+      },
+      orderBy: { fullName: 'asc' },
+    });
+
+    return members.map((member) => ({
+      id: member.id,
+      fullName: member.fullName,
+      email: member.email ?? '',
+    }));
+  }
+
   async exportBySprint(
     query: TicketExportQueryDto,
     currentUser: AuthenticatedUser,
@@ -457,7 +530,6 @@ export class TicketsService {
       limit: 10_000,
       sortBy: 'createdAt',
       sortOrder: 'asc',
-      scope: currentUser.role === RoleType.DEVELOPER ? 'all' : undefined,
     };
 
     const where = await this.buildListWhere(listQuery, currentUser);
@@ -607,36 +679,12 @@ export class TicketsService {
         : {}),
     };
 
-    if (
-      currentUser.role === RoleType.DEVELOPER &&
-      query.scope === 'all'
-    ) {
-      return {
-        deletedAt: null,
-        ...(projectIds !== 'all' ? { projectId: { in: projectIds } } : {}),
-        ...(query.status ? { status: query.status } : {}),
-        ...(query.priority ? { priority: query.priority } : {}),
-        ...(query.type ? { type: query.type } : {}),
-        ...(query.projectId ? { projectId: query.projectId } : {}),
-        ...(query.sprintId ? { sprintId: query.sprintId } : {}),
-        ...(query.assignedToId ? { assignedToId: query.assignedToId } : {}),
-        ...(query.createdById ? { createdById: query.createdById } : {}),
-        ...(query.search
-          ? {
-              OR: [
-                {
-                  title: { contains: query.search, mode: 'insensitive' },
-                },
-                {
-                  ticketNumber: { contains: query.search, mode: 'insensitive' },
-                },
-                {
-                  description: { contains: query.search, mode: 'insensitive' },
-                },
-              ],
-            }
-          : {}),
-      };
+    if (query.scope === 'mine') {
+      if (currentUser.role === RoleType.DEVELOPER) {
+        where.assignedToId = currentUser.id;
+      } else if (currentUser.role === RoleType.USER) {
+        where.createdById = currentUser.id;
+      }
     }
 
     return where;
@@ -684,6 +732,39 @@ export class TicketsService {
         'Invalid assignee. Must be a developer assigned to this project.',
       );
     }
+  }
+
+  private async validateMentionUser(
+    userId: string,
+    projectId: string,
+  ): Promise<{ id: string; fullName: string; email: string | null }> {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        deletedAt: null,
+        isActive: true,
+        OR: [
+          { role: { name: RoleType.ADMIN } },
+          {
+            userProjects: {
+              some: {
+                projectId,
+                project: { deletedAt: null, isActive: true },
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true, fullName: true, email: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException(
+        'Invalid mention user. Must be an active member of this project.',
+      );
+    }
+
+    return user;
   }
 
   private async resolveTicketProjectContext(
@@ -800,6 +881,7 @@ export class TicketsService {
       sprintId: ticket.sprintId,
       createdById: ticket.createdById,
       assignedToId: ticket.assignedToId,
+      verificationUserId: ticket.verificationUserId,
       resolvedAt: ticket.resolvedAt?.toISOString() ?? null,
       closedAt: ticket.closedAt?.toISOString() ?? null,
       createdAt: ticket.createdAt.toISOString(),
@@ -807,6 +889,9 @@ export class TicketsService {
       createdBy: this.mapUserSummary(ticket.createdBy),
       assignedTo: ticket.assignedTo
         ? this.mapUserSummary(ticket.assignedTo)
+        : null,
+      verificationUser: ticket.verificationUser
+        ? this.mapUserSummary(ticket.verificationUser)
         : null,
       project: {
         id: ticket.project.id,

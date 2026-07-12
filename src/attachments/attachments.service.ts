@@ -14,9 +14,9 @@ import { AuthenticatedUser } from '../auth/interfaces/auth.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import {
-  assertCanViewTicket,
   TicketAccessContext,
 } from '../tickets/ticket-workflow';
+import { assertTicketVisibleToUser } from '../tickets/ticket-scope.util';
 import { AttachmentQueryDto } from './dto/attachment-query.dto';
 import {
   AttachmentDownloadResponseDto,
@@ -50,7 +50,7 @@ export class AttachmentsService {
     currentUser: AuthenticatedUser,
   ): Promise<PaginatedResult<AttachmentResponseDto>> {
     const ticket = await this.getTicketAccessContext(ticketId);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -86,7 +86,7 @@ export class AttachmentsService {
     currentUser: AuthenticatedUser,
   ): Promise<AttachmentResponseDto> {
     const ticket = await this.getTicketForUpload(ticketId);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     this.validateFile(file, currentUser.role);
 
@@ -145,7 +145,7 @@ export class AttachmentsService {
     currentUser: AuthenticatedUser,
   ): Promise<AttachmentDownloadResponseDto> {
     const ticket = await this.getTicketAccessContext(ticketId);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const attachment = await this.findAttachmentOrThrow(ticketId, attachmentId);
     const expiresIn = 3600;
@@ -167,7 +167,7 @@ export class AttachmentsService {
     currentUser: AuthenticatedUser,
   ): Promise<{ message: string }> {
     const ticket = await this.getTicketAccessContext(ticketId);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const attachment = await this.findAttachmentOrThrow(ticketId, attachmentId);
 
@@ -232,6 +232,7 @@ export class AttachmentsService {
         status: true,
         createdById: true,
         assignedToId: true,
+        projectId: true,
         sprintId: true,
         project: {
           select: {
@@ -258,6 +259,7 @@ export class AttachmentsService {
         status: true,
         createdById: true,
         assignedToId: true,
+        projectId: true,
       },
     });
 

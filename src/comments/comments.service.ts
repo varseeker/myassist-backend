@@ -12,9 +12,9 @@ import { AuthenticatedUser } from '../auth/interfaces/auth.interface';
 import { NotificationsDispatchService } from '../notifications/notifications-dispatch.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  assertCanViewTicket,
   TicketAccessContext,
 } from '../tickets/ticket-workflow';
+import { assertTicketVisibleToUser } from '../tickets/ticket-scope.util';
 import { TicketNotificationContext } from '../notifications/notifications.types';
 import { CommentQueryDto } from './dto/comment-query.dto';
 import {
@@ -45,7 +45,7 @@ export class CommentsService {
     currentUser: AuthenticatedUser,
   ): Promise<PaginatedResult<CommentResponseDto>> {
     const ticket = await this.getTicketAccessContext(ticketId);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -87,7 +87,7 @@ export class CommentsService {
     currentUser: AuthenticatedUser,
   ): Promise<CommentResponseDto> {
     const ticket = await this.getTicketAccessContext(ticketId);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const content = dto.content.trim();
     const mentions = await this.resolveMentions(content);
@@ -136,7 +136,7 @@ export class CommentsService {
     currentUser: AuthenticatedUser,
   ): Promise<CommentResponseDto> {
     const ticket = await this.getTicketAccessContext(ticketId);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const comment = await this.findCommentOrThrow(ticketId, commentId);
 
@@ -162,7 +162,7 @@ export class CommentsService {
     currentUser: AuthenticatedUser,
   ): Promise<{ message: string }> {
     const ticket = await this.getTicketAccessContext(ticketId);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const comment = await this.findCommentOrThrow(ticketId, commentId);
 
@@ -194,7 +194,7 @@ export class CommentsService {
     currentUser: AuthenticatedUser,
   ): Promise<MentionableUserDto[]> {
     const ticket = await this.getTicketAccessContext(ticketId);
-    assertCanViewTicket(currentUser.role, currentUser.id, ticket);
+    await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const participantIds = [ticket.createdById];
     if (ticket.assignedToId) {
@@ -283,6 +283,7 @@ export class CommentsService {
         createdById: true,
         assignedToId: true,
         managedById: true,
+        projectId: true,
       },
     });
 

@@ -59,6 +59,7 @@ export class NotificationsDispatchService {
     toStatus: string,
     actorId: string,
     assignedToId?: string,
+    mentionUserId?: string,
   ): Promise<void> {
     const effectiveAssignee = assignedToId ?? ticket.assignedToId;
 
@@ -95,8 +96,37 @@ export class NotificationsDispatchService {
       });
     }
 
+    if (toStatus === 'RESOLVED' && mentionUserId && mentionUserId !== actorId) {
+      const title = 'Diminta uji ulang tiket';
+      const message = `${ticket.ticketNumber} — ${ticket.title}\nQA menandai tiket resolved. Mohon coba kembali lalu Close jika sudah OK, atau Reopen jika masih bermasalah.`;
+
+      await this.createAndEmit([
+        {
+          userId: mentionUserId,
+          type: NotificationType.TICKET_MENTIONED,
+          title,
+          message,
+          data: {
+            ticketId: ticket.id,
+            ticketNumber: ticket.ticketNumber,
+            fromStatus,
+            toStatus,
+          },
+        },
+      ]);
+
+      await this.messagingService.notifyUsers([mentionUserId], {
+        title,
+        body: message,
+        ticketId: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+      });
+    }
+
     const statusRecipients = recipientIds.filter(
-      (id) => !(toStatus === 'ASSIGNED' && id === effectiveAssignee),
+      (id) =>
+        !(toStatus === 'ASSIGNED' && id === effectiveAssignee) &&
+        !(toStatus === 'RESOLVED' && id === mentionUserId),
     );
 
     if (statusRecipients.length > 0) {
