@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { NotificationType, RoleType } from '@prisma/client';
+import { NotificationType } from '@prisma/client';
+import { MessagingService } from '../messaging/messaging.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { mapNotificationEntity } from './notifications.mapper';
@@ -13,25 +14,24 @@ export class NotificationsDispatchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtimeService: RealtimeService,
+    private readonly messagingService: MessagingService,
   ) {}
 
   async notifyTicketCreated(
     ticket: TicketNotificationContext,
     actorId: string,
   ): Promise<void> {
-    const recipients = await this.prisma.user.findMany({
-      where: {
-        deletedAt: null,
-        isActive: true,
-        id: { not: actorId },
-        role: { name: { in: [RoleType.ADMIN, RoleType.QA] } },
-      },
-      select: { id: true },
+    const recipientIds = await this.messagingService.resolveTicketRecipients({
+      actorId,
+      event: 'created',
+      createdById: ticket.createdById,
+      assignedToId: ticket.assignedToId,
+      managedById: ticket.managedById,
     });
 
     await this.createAndEmit(
-      recipients.map((user) => ({
-        userId: user.id,
+      recipientIds.map((userId) => ({
+        userId,
         type: NotificationType.TICKET_CREATED,
         title: 'New ticket created',
         message: `${ticket.ticketNumber}: ${ticket.title}`,
@@ -41,6 +41,13 @@ export class NotificationsDispatchService {
         },
       })),
     );
+
+    await this.messagingService.notifyUsers(recipientIds, {
+      title: 'New ticket created',
+      body: `${ticket.ticketNumber}: ${ticket.title}`,
+      ticketId: ticket.id,
+      ticketNumber: ticket.ticketNumber,
+    });
   }
 
   async notifyTicketStatusChanged(
@@ -50,16 +57,15 @@ export class NotificationsDispatchService {
     actorId: string,
     assignedToId?: string,
   ): Promise<void> {
-    const recipientIds = new Set<string>();
-
-    if (ticket.createdById !== actorId) {
-      recipientIds.add(ticket.createdById);
-    }
-
     const effectiveAssignee = assignedToId ?? ticket.assignedToId;
-    if (effectiveAssignee && effectiveAssignee !== actorId) {
-      recipientIds.add(effectiveAssignee);
-    }
+
+    const recipientIds = await this.messagingService.resolveTicketRecipients({
+      actorId,
+      event: 'activity',
+      createdById: ticket.createdById,
+      assignedToId: effectiveAssignee,
+      managedById: ticket.managedById,
+    });
 
     if (toStatus === 'ASSIGNED' && effectiveAssignee) {
       await this.createAndEmit([
@@ -75,27 +81,42 @@ export class NotificationsDispatchService {
         },
       ]);
 
-      recipientIds.delete(effectiveAssignee);
+      await this.messagingService.notifyUsers([effectiveAssignee], {
+        title: 'Ticket assigned to you',
+        body: `${ticket.ticketNumber}: ${ticket.title}`,
+        ticketId: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+      });
     }
 
-    if (recipientIds.size === 0) {
-      return;
-    }
-
-    await this.createAndEmit(
-      [...recipientIds].map((userId) => ({
-        userId,
-        type: NotificationType.TICKET_STATUS_CHANGED,
-        title: 'Ticket status updated',
-        message: `${ticket.ticketNumber} moved from ${fromStatus} to ${toStatus}`,
-        data: {
-          ticketId: ticket.id,
-          ticketNumber: ticket.ticketNumber,
-          fromStatus,
-          toStatus,
-        },
-      })),
+    const statusRecipients = recipientIds.filter(
+      (id) => !(toStatus === 'ASSIGNED' && id === effectiveAssignee),
     );
+
+    if (statusRecipients.length > 0) {
+      await this.createAndEmit(
+        statusRecipients.map((userId) => ({
+          userId,
+          type: NotificationType.TICKET_STATUS_CHANGED,
+          title: 'Ticket status updated',
+          message: `${ticket.ticketNumber} moved from ${fromStatus} to ${toStatus}`,
+          data: {
+            ticketId: ticket.id,
+            ticketNumber: ticket.ticketNumber,
+            fromStatus,
+            toStatus,
+          },
+        })),
+      );
+
+      await this.messagingService.notifyUsers(statusRecipients, {
+        title: 'Ticket status updated',
+        body: `${ticket.ticketNumber} moved from ${fromStatus} to ${toStatus}`,
+        ticketId: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+        metadata: { fromStatus, toStatus },
+      });
+    }
   }
 
   async notifyTicketCommented(
@@ -109,8 +130,9 @@ export class NotificationsDispatchService {
     );
 
     if (mentionSet.size > 0) {
+      const mentionIds = [...mentionSet];
       await this.createAndEmit(
-        [...mentionSet].map((userId) => ({
+        mentionIds.map((userId) => ({
           userId,
           type: NotificationType.TICKET_MENTIONED,
           title: 'You were mentioned',
@@ -122,28 +144,31 @@ export class NotificationsDispatchService {
           },
         })),
       );
+
+      await this.messagingService.notifyUsers(mentionIds, {
+        title: 'You were mentioned',
+        body: `You were mentioned on ${ticket.ticketNumber}`,
+        ticketId: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+      });
     }
 
-    const participantIds = new Set<string>();
+    const recipientIds = await this.messagingService.resolveTicketRecipients({
+      actorId,
+      event: 'activity',
+      createdById: ticket.createdById,
+      assignedToId: ticket.assignedToId,
+      managedById: ticket.managedById,
+    });
 
-    if (ticket.createdById !== actorId && !mentionSet.has(ticket.createdById)) {
-      participantIds.add(ticket.createdById);
-    }
+    const participantIds = recipientIds.filter((id) => !mentionSet.has(id));
 
-    if (
-      ticket.assignedToId &&
-      ticket.assignedToId !== actorId &&
-      !mentionSet.has(ticket.assignedToId)
-    ) {
-      participantIds.add(ticket.assignedToId);
-    }
-
-    if (participantIds.size === 0) {
+    if (participantIds.length === 0) {
       return;
     }
 
     await this.createAndEmit(
-      [...participantIds].map((userId) => ({
+      participantIds.map((userId) => ({
         userId,
         type: NotificationType.TICKET_COMMENTED,
         title: 'New comment on ticket',
@@ -155,6 +180,13 @@ export class NotificationsDispatchService {
         },
       })),
     );
+
+    await this.messagingService.notifyUsers(participantIds, {
+      title: 'New comment on ticket',
+      body: `New comment on ${ticket.ticketNumber}`,
+      ticketId: ticket.id,
+      ticketNumber: ticket.ticketNumber,
+    });
   }
 
   private async createAndEmit(inputs: CreateNotificationInput[]): Promise<void> {

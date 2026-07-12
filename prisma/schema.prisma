@@ -62,31 +62,53 @@ model Role {
   @@map("roles")
 }
 
+enum MessagingChannel {
+  WHATSAPP_BAILEYS
+  TELEGRAM
+  WHATSAPP_META
+}
+
+enum MessagingDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 model User {
-  id           String    @id @default(uuid()) @db.Uuid
-  email        String    @unique
-  passwordHash String    @map("password_hash")
-  fullName     String    @map("full_name")
-  avatarUrl    String?   @map("avatar_url")
-  isActive     Boolean   @default(true) @map("is_active")
-  roleId       String    @map("role_id") @db.Uuid
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
+  id                String    @id @default(uuid()) @db.Uuid
+  email             String    @unique
+  passwordHash      String    @map("password_hash")
+  fullName          String    @map("full_name")
+  avatarUrl         String?   @map("avatar_url")
+  phoneNumber       String?   @map("phone_number")
+  whatsappEnabled   Boolean   @default(true) @map("whatsapp_enabled")
+  telegramChatId    String?   @map("telegram_chat_id")
+  telegramEnabled   Boolean   @default(true) @map("telegram_enabled")
+  telegramLinkToken String?   @unique @map("telegram_link_token")
+  isActive          Boolean   @default(true) @map("is_active")
+  roleId            String    @map("role_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
 
   role                  Role               @relation(fields: [roleId], references: [id])
   userProjects          UserProject[]
   createdTickets        Ticket[]           @relation("TicketCreator")
   assignedTickets       Ticket[]           @relation("TicketAssignee")
+  managedTickets        Ticket[]           @relation("TicketManager")
   comments              TicketComment[]
   attachments           TicketAttachment[]
   ticketHistories       TicketHistory[]
   notifications         Notification[]
   refreshTokens         RefreshToken[]
   passwordResetTokens   PasswordResetToken[]
+  messagingDeliveries    MessagingDeliveryLog[]
 
   @@index([roleId])
   @@index([email])
+  @@index([phoneNumber])
+  @@index([telegramChatId])
   @@map("users")
 }
 
@@ -129,6 +151,7 @@ model Ticket {
   sprintId     String?        @map("sprint_id") @db.Uuid
   createdById  String         @map("created_by_id") @db.Uuid
   assignedToId String?        @map("assigned_to_id") @db.Uuid
+  managedById  String?        @map("managed_by_id") @db.Uuid
   resolvedAt   DateTime?      @map("resolved_at")
   closedAt     DateTime?      @map("closed_at")
   createdAt    DateTime       @default(now()) @map("created_at")
@@ -139,6 +162,7 @@ model Ticket {
   sprint      Sprint?            @relation(fields: [sprintId], references: [id])
   createdBy   User               @relation("TicketCreator", fields: [createdById], references: [id])
   assignedTo  User?              @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  managedBy   User?              @relation("TicketManager", fields: [managedById], references: [id])
   comments    TicketComment[]
   attachments TicketAttachment[]
   histories   TicketHistory[]
@@ -150,6 +174,7 @@ model Ticket {
   @@index([sprintId])
   @@index([createdById])
   @@index([assignedToId])
+  @@index([managedById])
   @@index([createdAt])
   @@map("tickets")
 }
@@ -226,6 +251,27 @@ model Notification {
   @@index([isRead])
   @@index([createdAt])
   @@map("notifications")
+}
+
+model MessagingDeliveryLog {
+  id        String                   @id @default(uuid()) @db.Uuid
+  userId    String                   @map("user_id") @db.Uuid
+  channel   MessagingChannel
+  status    MessagingDeliveryStatus  @default(PENDING)
+  title     String
+  message   String
+  payload   Json?
+  error     String?
+  createdAt DateTime                 @default(now()) @map("created_at")
+  updatedAt DateTime                 @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([channel])
+  @@index([status])
+  @@index([createdAt])
+  @@map("messaging_delivery_logs")
 }
 
 model Project {

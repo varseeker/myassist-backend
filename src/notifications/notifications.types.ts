@@ -14,4 +14,5 @@ export interface TicketNotificationContext {
   title: string;
   createdById: string;
   assignedToId: string | null;
+  managedById?: string | null;
 }

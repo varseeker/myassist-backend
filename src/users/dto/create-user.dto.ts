@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsNotEmpty,
@@ -35,6 +36,31 @@ export class CreateUserDto {
   @IsOptional()
   @IsUrl()
   avatarUrl?: string;
+
+  @ApiPropertyOptional({
+    example: '081234567890',
+    description: 'Phone number for WhatsApp notifications (08... or +62...)',
+  })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  whatsappEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Telegram chat id (filled automatically via bot link, or manually)',
+  })
+  @IsOptional()
+  @IsString()
+  telegramChatId?: string;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  telegramEnabled?: boolean;
 
   @ApiPropertyOptional({
     type: [String],

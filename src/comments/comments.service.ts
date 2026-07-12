@@ -280,6 +280,7 @@ export class CommentsService {
         status: true,
         createdById: true,
         assignedToId: true,
+        managedById: true,
       },
     });
 

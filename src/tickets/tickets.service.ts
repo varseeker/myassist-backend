@@ -228,6 +228,11 @@ export class TicketsService {
       throw new BadRequestException('No fields to update');
     }
 
+    if (currentUser.role === RoleType.QA && !ticket.managedById) {
+      data.managedBy = { connect: { id: currentUser.id } };
+    }
+
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.ticket.update({
         where: { id },
@@ -303,6 +308,13 @@ export class TicketsService {
 
     if (dto.assignedToId) {
       data.assignedTo = { connect: { id: dto.assignedToId } };
+    }
+
+    if (
+      currentUser.role === RoleType.QA &&
+      !ticket.managedById
+    ) {
+      data.managedBy = { connect: { id: currentUser.id } };
     }
 
     if (nextStatus === TicketStatus.RESOLVED) {
@@ -677,6 +689,7 @@ export class TicketsService {
     title: string;
     createdById: string;
     assignedToId: string | null;
+    managedById?: string | null;
   }) {
     return {
       id: ticket.id,
@@ -684,6 +697,7 @@ export class TicketsService {
       title: ticket.title,
       createdById: ticket.createdById,
       assignedToId: ticket.assignedToId,
+      managedById: ticket.managedById ?? null,
     };
   }
 }

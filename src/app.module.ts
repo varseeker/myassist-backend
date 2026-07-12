@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { CommentsModule } from './comments/comments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { MessagingModule } from './messaging/messaging.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -34,6 +35,7 @@ import { UsersModule } from './users/users.module';
     CommentsModule,
     AttachmentsModule,
     NotificationsModule,
+    MessagingModule,
     RealtimeModule,
     DashboardModule,
   ],

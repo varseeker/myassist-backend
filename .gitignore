@@ -13,6 +13,9 @@ generated/
 # Local uploads (when STORAGE_DRIVER=local)
 uploads/
 
+# Baileys WhatsApp session (do not commit)
+.baileys-auth/
+
 # Logs
 logs/
 *.log

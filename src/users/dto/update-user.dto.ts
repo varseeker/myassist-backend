@@ -38,6 +38,26 @@ export class UpdateUserDto {
   @IsUrl()
   avatarUrl?: string;
 
+  @ApiPropertyOptional({ example: '081234567890' })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  whatsappEnabled?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  telegramChatId?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  telegramEnabled?: boolean;
+
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()

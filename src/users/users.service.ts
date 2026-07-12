@@ -10,6 +10,7 @@ import {
   buildPaginatedResult,
   PaginatedResult,
 } from '../common/dto/pagination.dto';
+import { createTelegramLinkToken, normalizePhoneNumber } from '../messaging/messaging.utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -109,6 +110,7 @@ export class UsersService {
     await this.validateProjectAssignments(dto.role, dto.projectIds);
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
+    const phoneNumber = this.normalizeOptionalPhone(dto.phoneNumber);
 
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
@@ -117,6 +119,11 @@ export class UsersService {
           passwordHash,
           fullName: dto.fullName,
           avatarUrl: dto.avatarUrl,
+          phoneNumber,
+          whatsappEnabled: dto.whatsappEnabled ?? true,
+          telegramChatId: dto.telegramChatId?.trim() || null,
+          telegramEnabled: dto.telegramEnabled ?? true,
+          telegramLinkToken: createTelegramLinkToken(),
           roleId: role.id,
         },
         include: {
@@ -171,6 +178,22 @@ export class UsersService {
       data.avatarUrl = dto.avatarUrl;
     }
 
+    if (dto.phoneNumber !== undefined) {
+      data.phoneNumber = this.normalizeOptionalPhone(dto.phoneNumber);
+    }
+
+    if (dto.whatsappEnabled !== undefined) {
+      data.whatsappEnabled = dto.whatsappEnabled;
+    }
+
+    if (dto.telegramChatId !== undefined) {
+      data.telegramChatId = dto.telegramChatId?.trim() || null;
+    }
+
+    if (dto.telegramEnabled !== undefined) {
+      data.telegramEnabled = dto.telegramEnabled;
+    }
+
     if (dto.isActive !== undefined) {
       data.isActive = dto.isActive;
     }
@@ -197,6 +220,10 @@ export class UsersService {
     }
 
     const updatedUser = await this.prisma.$transaction(async (tx) => {
+      if (!user.telegramLinkToken) {
+        data.telegramLinkToken = createTelegramLinkToken();
+      }
+
       await tx.user.update({
         where: { id },
         data,
@@ -334,12 +361,30 @@ export class UsersService {
     }
   }
 
+  private normalizeOptionalPhone(value?: string | null): string | null {
+    if (value === undefined || value === null || value.trim() === '') {
+      return null;
+    }
+
+    const normalized = normalizePhoneNumber(value);
+    if (!normalized) {
+      throw new BadRequestException('Invalid phone number format');
+    }
+
+    return normalized;
+  }
+
   private mapUser(user: UserWithRole): UserResponseDto {
     return {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,
+      phoneNumber: user.phoneNumber,
+      whatsappEnabled: user.whatsappEnabled,
+      telegramChatId: user.telegramChatId,
+      telegramEnabled: user.telegramEnabled,
+      telegramLinkToken: user.telegramLinkToken,
       role: user.role.name,
       roleId: user.role.id,
       isActive: user.isActive,

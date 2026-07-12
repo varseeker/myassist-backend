@@ -89,3 +89,25 @@ npx prisma db seed
 | Bucket not found | Pastikan `SUPABASE_SERVICE_ROLE_KEY` valid; bucket dibuat otomatis saat startup |
 | CORS error | Update `CORS_ORIGIN` dengan URL frontend yang benar |
 | Cold start lambat | Normal di plan Free Render (~30 detik) |
+
+---
+
+## 6. Messaging (WhatsApp Baileys + Telegram)
+
+| Variable | Catatan |
+|----------|---------|
+| `FRONTEND_URL` | URL Vercel frontend (link di pesan) |
+| `MESSAGING_WHATSAPP_DRIVER` | `baileys` (default) / `meta` (future) / `off` |
+| `BAILEYS_AUTH_PATH` | Default `.baileys-auth` |
+| `BAILEYS_AUTO_CONNECT` | `true` / `false` |
+| `MESSAGING_TELEGRAM_ENABLED` | `true` / `false` |
+| `TELEGRAM_BOT_TOKEN` | Dari @BotFather |
+| `TELEGRAM_BOT_USERNAME` | Username bot tanpa `@` |
+
+Set Telegram webhook setelah deploy:
+
+```bash
+curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<APP_URL>/api/v1/messaging/telegram/webhook"
+```
+
+Admin scan QR di halaman frontend **Messaging**. Baileys unofficial — untuk jangka panjang, ganti ke Meta Cloud API lewat `MESSAGING_WHATSAPP_DRIVER=meta`.

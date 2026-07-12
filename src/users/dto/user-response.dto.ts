@@ -29,6 +29,21 @@ export class UserResponseDto {
   @ApiPropertyOptional()
   avatarUrl?: string | null;
 
+  @ApiPropertyOptional({ nullable: true })
+  phoneNumber?: string | null;
+
+  @ApiProperty()
+  whatsappEnabled!: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  telegramChatId?: string | null;
+
+  @ApiProperty()
+  telegramEnabled!: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  telegramLinkToken?: string | null;
+
   @ApiProperty({ enum: RoleType })
   role!: RoleType;
 
