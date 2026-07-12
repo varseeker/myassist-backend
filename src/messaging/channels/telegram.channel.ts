@@ -7,7 +7,7 @@ import {
   MessagingRecipient,
   OutboundMessage,
 } from '../messaging.types';
-import { formatTelegramHtml } from '../messaging.utils';
+import { formatTelegramHtml, resolveMessageLinks } from '../messaging.utils';
 
 @Injectable()
 export class TelegramChannel extends BaseMessagingChannel {
@@ -64,13 +64,11 @@ export class TelegramChannel extends BaseMessagingChannel {
       };
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL')?.trim();
-    const link =
-      message.ticketId && frontendUrl
-        ? `${frontendUrl.replace(/\/$/, '')}/tickets/${message.ticketId}`
-        : undefined;
-
-    const text = formatTelegramHtml(message.title, message.body, link);
+    const links = resolveMessageLinks(
+      this.configService.get<string>('FRONTEND_URL'),
+      message.ticketId,
+    );
+    const text = formatTelegramHtml(message.title, message.body, links);
 
     try {
       await this.apiCall('sendMessage', {
@@ -84,10 +82,16 @@ export class TelegramChannel extends BaseMessagingChannel {
     } catch (error) {
       // Fallback plain text if HTML parse fails
       try {
-        const plain = `${message.title}\n\n${message.body}${link ? `\n\n${link}` : ''}`;
+        const plainParts = [message.title, '', message.body];
+        if (links.ticketUrl) {
+          plainParts.push('', `Buka tiket: ${links.ticketUrl}`);
+        }
+        if (links.appUrl) {
+          plainParts.push(`Web MyAssist: ${links.appUrl}`);
+        }
         await this.apiCall('sendMessage', {
           chat_id: recipient.telegramChatId,
-          text: plain,
+          text: plainParts.join('\n'),
           disable_web_page_preview: false,
         });
         return { channel: this.channel, status: 'SENT' };

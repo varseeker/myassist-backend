@@ -16,7 +16,7 @@ import {
   OutboundMessage,
   WhatsAppSessionStatus,
 } from '../messaging.types';
-import { formatOutboundText, toWhatsAppJid } from '../messaging.utils';
+import { formatOutboundText, resolveMessageLinks, toWhatsAppJid } from '../messaging.utils';
 
 type BaileysSocket = {
   end: (error?: Error) => void;
@@ -619,13 +619,11 @@ export class BaileysWhatsAppChannel
       };
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL')?.trim();
-    const link =
-      message.ticketId && frontendUrl
-        ? `${frontendUrl.replace(/\/$/, '')}/tickets/${message.ticketId}`
-        : undefined;
-
-    const text = formatOutboundText(message.title, message.body, link);
+    const links = resolveMessageLinks(
+      this.configService.get<string>('FRONTEND_URL'),
+      message.ticketId,
+    );
+    const text = formatOutboundText(message.title, message.body, links);
 
     try {
       const result = await this.socket.sendMessage(jid, { text });

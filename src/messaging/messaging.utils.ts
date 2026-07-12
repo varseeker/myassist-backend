@@ -27,10 +27,30 @@ export function toWhatsAppJid(phoneNumber: string): string | null {
   return normalized ? `${normalized}@s.whatsapp.net` : null;
 }
 
+export interface MessageLinks {
+  appUrl?: string;
+  ticketUrl?: string;
+}
+
+export function resolveMessageLinks(
+  frontendUrl?: string | null,
+  ticketId?: string,
+): MessageLinks {
+  const base = frontendUrl?.trim().replace(/\/$/, '');
+  if (!base) {
+    return {};
+  }
+
+  return {
+    appUrl: base,
+    ticketUrl: ticketId ? `${base}/tickets/${ticketId}` : undefined,
+  };
+}
+
 export function formatOutboundText(
   title: string,
   body: string,
-  link?: string,
+  links: MessageLinks = {},
 ): string {
   const parts = [
     '*MyAssist — Notifikasi Tiket*',
@@ -39,18 +59,22 @@ export function formatOutboundText(
     body,
   ];
 
-  if (link) {
-    parts.push('', `🔗 Buka tiket: ${link}`);
+  if (links.ticketUrl) {
+    parts.push('', `🔗 Buka tiket: ${links.ticketUrl}`);
+  }
+
+  if (links.appUrl) {
+    parts.push('', `🌐 Web MyAssist: ${links.appUrl}`);
   }
 
   parts.push('', '_Pesan otomatis dari MyAssist. Jangan balas ke chat ini._');
-  return parts.filter((line) => line !== undefined).join('\n');
+  return parts.join('\n');
 }
 
 export function formatTelegramHtml(
   title: string,
   body: string,
-  link?: string,
+  links: MessageLinks = {},
 ): string {
   const escape = (value: string) =>
     value
@@ -65,11 +89,18 @@ export function formatTelegramHtml(
     escape(body),
   ];
 
-  if (link) {
-    parts.push('', `🔗 <a href="${escape(link)}">Buka tiket di MyAssist</a>`);
+  if (links.ticketUrl) {
+    parts.push(
+      '',
+      `<a href="${escape(links.ticketUrl)}">Buka tiket di MyAssist</a>`,
+    );
   }
 
-  parts.push('', '<i>Pesan otomatis dari MyAssist (Telegram + WhatsApp).</i>');
+  if (links.appUrl) {
+    parts.push('', `<a href="${escape(links.appUrl)}">Buka web MyAssist</a>`);
+  }
+
+  parts.push('', '<i>Pesan otomatis dari MyAssist.</i>');
   return parts.join('\n');
 }
 
