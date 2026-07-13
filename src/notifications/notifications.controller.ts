@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -56,6 +57,15 @@ export class NotificationsController {
     return this.notificationsService.markAllAsRead(currentUser.id);
   }
 
+  @Delete()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete all notifications for the current user' })
+  removeAll(
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<{ message: string; deletedCount: number }> {
+    return this.notificationsService.removeAll(currentUser.id);
+  }
+
   @Patch(':id/read')
   @ApiOperation({ summary: 'Mark a notification as read' })
   markAsRead(
@@ -63,5 +73,15 @@ export class NotificationsController {
     @CurrentUser() currentUser: AuthenticatedUser,
   ): Promise<NotificationResponseDto> {
     return this.notificationsService.markAsRead(currentUser.id, id);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a notification' })
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    return this.notificationsService.remove(currentUser.id, id);
   }
 }

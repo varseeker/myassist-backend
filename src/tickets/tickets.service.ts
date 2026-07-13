@@ -19,6 +19,7 @@ import {
 } from '../common/dto/pagination.dto';
 import { AuthenticatedUser } from '../auth/interfaces/auth.interface';
 import { NotificationsDispatchService } from '../notifications/notifications-dispatch.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import {
@@ -89,6 +90,7 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsDispatch: NotificationsDispatchService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async findAll(
@@ -519,6 +521,8 @@ export class TicketsService {
       }),
     ]);
 
+    await this.notificationsService.deleteByTicketIds([id]);
+
     return { message: 'Ticket deleted successfully' };
   }
 
@@ -587,6 +591,10 @@ export class TicketsService {
         })),
       });
     });
+
+    await this.notificationsService.deleteByTicketIds(
+      tickets.map((ticket) => ticket.id),
+    );
 
     return {
       message: `${tickets.length} ticket(s) deleted successfully`,

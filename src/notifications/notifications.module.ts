@@ -9,6 +9,6 @@ import { NotificationsService } from './notifications.service';
   imports: [RealtimeModule, MessagingModule],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationsDispatchService],
-  exports: [NotificationsDispatchService],
+  exports: [NotificationsDispatchService, NotificationsService],
 })
 export class NotificationsModule {}
