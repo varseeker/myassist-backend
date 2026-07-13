@@ -84,7 +84,7 @@ export class CreateUserDto {
   @ApiPropertyOptional({
     type: [String],
     description:
-      'Project assignments. USER role must have exactly one project. QA/DEVELOPER may have multiple.',
+      'Project assignments. USER may have 0 or 1 project. QA/DEVELOPER need at least one.',
   })
   @IsOptional()
   @IsArray()

@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
   Res,
@@ -29,7 +30,9 @@ import {
 } from './dto/auth-response.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { RolesGuard } from './guards/roles.guard';
 import type { AuthenticatedUser } from './interfaces/auth.interface';
 import { REFRESH_TOKEN_COOKIE } from './interfaces/auth.interface';
@@ -48,6 +51,14 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthTokensDto> {
     return this.authService.login(dto, res);
+  }
+
+  @Public()
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Self-register as USER role (no project yet)' })
+  register(@Body() dto: RegisterDto): Promise<MessageResponseDto> {
+    return this.authService.register(dto);
   }
 
   @Public()
@@ -85,6 +96,19 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current authenticated user profile' })
   me(@CurrentUser() user: AuthenticatedUser): Promise<AuthUserDto> {
     return this.authService.getProfile(user.id);
+  }
+
+  @Patch('profile')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Update own profile (email, username, full name, WhatsApp, Telegram)',
+  })
+  updateProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateProfileDto,
+  ): Promise<AuthUserDto> {
+    return this.authService.updateProfile(user.id, dto);
   }
 
   @Public()

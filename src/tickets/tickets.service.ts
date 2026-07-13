@@ -38,6 +38,7 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import {
   assertCanTransitionStatus,
   canEditTicketDetails,
+  canReassignTicket,
   getAvailableTransitions,
 } from './ticket-workflow';
 import {
@@ -46,6 +47,7 @@ import {
 } from './ticket-scope.util';
 import { getUserProjectIds } from '../projects/project-scope.util';
 import { resolveTicketStatusFilter } from './ticket-status-groups';
+import { BulkDeleteTicketsDto } from './dto/bulk-delete-tickets.dto';
 
 type TicketWithRelations = Prisma.TicketGetPayload<{
   include: {
@@ -286,6 +288,29 @@ export class TicketsService {
     await assertTicketVisibleToUser(this.prisma, currentUser, ticket);
 
     const nextStatus = dto.status;
+    const isReassignment =
+      ticket.status === TicketStatus.ASSIGNED &&
+      nextStatus === TicketStatus.ASSIGNED &&
+      Boolean(dto.assignedToId) &&
+      dto.assignedToId !== ticket.assignedToId;
+
+    if (isReassignment) {
+      if (!canReassignTicket(currentUser.role, ticket)) {
+        throw new ForbiddenException(
+          'You cannot reassign this ticket',
+        );
+      }
+    }
+
+    if (
+      nextStatus === TicketStatus.QA_REVIEW &&
+      (!dto.note || dto.note.trim().length < 3)
+    ) {
+      throw new BadRequestException(
+        'Note is required when moving to QA Review (minimal 3 characters)',
+      );
+    }
+
     const accessTicket = {
       ...ticket,
       assignedToId:
@@ -352,12 +377,14 @@ export class TicketsService {
       );
     }
 
-    assertCanTransitionStatus(
-      currentUser.role,
-      currentUser.id,
-      accessTicket,
-      nextStatus,
-    );
+    if (!isReassignment) {
+      assertCanTransitionStatus(
+        currentUser.role,
+        currentUser.id,
+        accessTicket,
+        nextStatus,
+      );
+    }
 
     const now = new Date();
     const data: Prisma.TicketUpdateInput = {
@@ -395,6 +422,8 @@ export class TicketsService {
       data.verificationUser = { disconnect: true };
     }
 
+    const noteValue = dto.note?.trim() || undefined;
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.ticket.update({
         where: { id },
@@ -406,13 +435,16 @@ export class TicketsService {
         data: {
           ticketId: id,
           userId: currentUser.id,
-          action: 'STATUS_CHANGED',
+          action: isReassignment ? 'ASSIGNEE_CHANGED' : 'STATUS_CHANGED',
           fromStatus: ticket.status,
           toStatus: nextStatus,
           metadata: {
-            note: dto.note,
+            ...(noteValue ? { note: noteValue } : {}),
             assignedToId: effectiveAssigneeId ?? dto.assignedToId,
             assignedToName: assigneeName,
+            previousAssignedToId: isReassignment
+              ? ticket.assignedToId
+              : undefined,
             actorName: currentUser.fullName,
             actorRole: currentUser.role,
             mentionUserId: dto.mentionUserId,
@@ -425,11 +457,12 @@ export class TicketsService {
         const mentionTag = mentionUser.email
           ? `@${mentionUser.email}`
           : `@${mentionUser.fullName}`;
+        const noteSuffix = noteValue ? ` Catatan QA: ${noteValue}` : '';
         await tx.ticketComment.create({
           data: {
             ticketId: id,
             userId: currentUser.id,
-            content: `${mentionTag} mohon uji ulang tiket ini setelah perbaikan. Catatan QA: ${dto.note}`,
+            content: `${mentionTag} mohon uji ulang tiket ini setelah perbaikan.${noteSuffix}`,
           },
         });
       }
@@ -477,6 +510,57 @@ export class TicketsService {
     ]);
 
     return { message: 'Ticket deleted successfully' };
+  }
+
+  async removeMany(
+    dto: BulkDeleteTicketsDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<{ message: string; deletedCount: number }> {
+    if (currentUser.role !== RoleType.ADMIN) {
+      throw new ForbiddenException('Only admins can delete tickets');
+    }
+
+    let ids = dto.ids ?? [];
+
+    if (dto.deleteMatchingFilter) {
+      const filter = dto.filter ?? {};
+      const where = await this.buildListWhere(filter, currentUser);
+      const matches = await this.prisma.ticket.findMany({
+        where,
+        select: { id: true },
+        take: 5_000,
+      });
+      ids = matches.map((ticket) => ticket.id);
+    }
+
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) {
+      throw new BadRequestException('No tickets selected for deletion');
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ticket.updateMany({
+        where: {
+          id: { in: uniqueIds },
+          deletedAt: null,
+        },
+        data: { deletedAt: now },
+      });
+
+      await tx.ticketHistory.createMany({
+        data: uniqueIds.map((ticketId) => ({
+          ticketId,
+          userId: currentUser.id,
+          action: 'TICKET_DELETED',
+        })),
+      });
+    });
+
+    return {
+      message: `${uniqueIds.length} ticket(s) deleted successfully`,
+      deletedCount: uniqueIds.length,
+    };
   }
 
   async getAssignees(projectId?: string): Promise<AssigneeResponseDto[]> {
@@ -1030,6 +1114,7 @@ export class TicketsService {
           }
         : null,
       availableTransitions: getAvailableTransitions(role, userId, ticket),
+      canReassign: canReassignTicket(role, ticket),
     };
   }
 

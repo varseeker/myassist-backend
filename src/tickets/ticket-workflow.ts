@@ -84,6 +84,21 @@ export function assertCanViewTicket(
   }
 }
 
+export function canReassignTicket(
+  role: RoleType,
+  ticket: TicketAccessContext,
+): boolean {
+  if (ticket.status !== TicketStatus.ASSIGNED) {
+    return false;
+  }
+
+  return (
+    role === RoleType.QA ||
+    role === RoleType.ADMIN ||
+    role === RoleType.DEVELOPER
+  );
+}
+
 export function canTransitionStatus(
   role: RoleType,
   userId: string,

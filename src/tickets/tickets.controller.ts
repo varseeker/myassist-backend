@@ -25,6 +25,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/auth.interface';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { BulkDeleteTicketsDto } from './dto/bulk-delete-tickets.dto';
 import { TicketExportQueryDto } from './dto/ticket-export-query.dto';
 import { TicketQueryDto } from './dto/ticket-query.dto';
 import {
@@ -52,8 +53,19 @@ export class TicketsController {
     return this.ticketsService.findAll(query, currentUser);
   }
 
+  @Post('bulk-delete')
+  @Roles(RoleType.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Bulk soft-delete tickets by IDs or filter' })
+  removeMany(
+    @Body() dto: BulkDeleteTicketsDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ): Promise<{ message: string; deletedCount: number }> {
+    return this.ticketsService.removeMany(dto, currentUser);
+  }
+
   @Get('assignees')
-  @Roles(RoleType.ADMIN, RoleType.QA)
+  @Roles(RoleType.ADMIN, RoleType.QA, RoleType.DEVELOPER)
   @ApiOperation({ summary: 'List developers available for assignment' })
   getAssignees(
     @Query('projectId') projectId?: string,

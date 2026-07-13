@@ -23,6 +23,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedUser } from '../auth/interfaces/auth.interface';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { AssignProjectMemberDto } from './dto/assign-project-member.dto';
 import { CreateSprintDto } from './dto/create-sprint.dto';
 import { ProjectQueryDto } from './dto/project-query.dto';
 import {
@@ -86,6 +87,59 @@ export class ProjectsController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<{ message: string }> {
     return this.projectsService.remove(id);
+  }
+
+  @Get(':projectId/members')
+  @Roles(RoleType.ADMIN, RoleType.QA)
+  @ApiOperation({ summary: 'List members of a project' })
+  listMembers(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ) {
+    return this.projectsService.listMembers(projectId, currentUser);
+  }
+
+  @Get(':projectId/assignable-users')
+  @Roles(RoleType.ADMIN, RoleType.QA)
+  @ApiOperation({ summary: 'List users that can be assigned to a project' })
+  listAssignableUsers(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query('search') search: string | undefined,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ) {
+    return this.projectsService.listAssignableUsers(
+      projectId,
+      currentUser,
+      search,
+    );
+  }
+
+  @Post(':projectId/members')
+  @Roles(RoleType.ADMIN, RoleType.QA)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Assign a user to a project' })
+  assignMember(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Body() dto: AssignProjectMemberDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ) {
+    return this.projectsService.assignMember(
+      projectId,
+      dto.userId,
+      currentUser,
+    );
+  }
+
+  @Delete(':projectId/members/:userId')
+  @Roles(RoleType.ADMIN, RoleType.QA)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove a user from a project' })
+  removeMember(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ) {
+    return this.projectsService.removeMember(projectId, userId, currentUser);
   }
 
   @Get(':projectId/sprints')

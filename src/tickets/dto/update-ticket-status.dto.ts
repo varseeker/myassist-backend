@@ -8,7 +8,6 @@ import {
   IsString,
   IsUUID,
   MaxLength,
-  MinLength,
   ValidateIf,
 } from 'class-validator';
 
@@ -25,16 +24,22 @@ export class UpdateTicketStatusDto {
   @ApiPropertyOptional({
     description: 'Required when moving to RESOLVED — user asked to retest',
   })
-  @ValidateIf((dto: UpdateTicketStatusDto) => dto.status === TicketStatus.RESOLVED)
+  @ValidateIf(
+    (dto: UpdateTicketStatusDto) => dto.status === TicketStatus.RESOLVED,
+  )
   @IsUUID()
   @IsNotEmpty()
   mentionUserId?: string;
 
-  @ApiProperty({ description: 'Required note for every status change' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @ApiPropertyOptional({
+    description:
+      'Required only when moving to QA_REVIEW. Optional for assign and other transitions.',
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Note is required when updating status' })
-  @MinLength(3, { message: 'Note must be at least 3 characters' })
   @MaxLength(1000)
-  note!: string;
+  note?: string;
 }

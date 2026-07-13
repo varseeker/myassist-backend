@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, RoleType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import ExcelJS from 'exceljs';
 import {
   buildPaginatedResult,
   PaginatedResult,
@@ -13,6 +14,10 @@ import {
 import { createTelegramLinkToken, normalizePhoneNumber } from '../messaging/messaging.utils';
 import { normalizeUsername } from '../common/utils/username.util';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  BulkImportUserRowResultDto,
+  BulkImportUsersResponseDto,
+} from './dto/bulk-import-users.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserQueryDto } from './dto/user-query.dto';
@@ -24,6 +29,16 @@ type UserWithRole = Prisma.UserGetPayload<{
     userProjects: { include: { project: true } };
   };
 }>;
+
+type BulkImportRow = {
+  row: number;
+  username: string;
+  role: string;
+  project: string;
+};
+
+const BULK_DEFAULT_PASSWORD = 'ChangeMe123!';
+const VALID_IMPORT_ROLES = new Set<string>(Object.values(RoleType));
 
 @Injectable()
 export class UsersService {
@@ -168,6 +183,290 @@ export class UsersService {
     });
 
     return this.mapUser(user);
+  }
+
+  async bulkImport(
+    file: Express.Multer.File,
+  ): Promise<BulkImportUsersResponseDto> {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('File is required');
+    }
+
+    const rows = await this.parseBulkImportFile(file);
+    if (rows.length === 0) {
+      throw new BadRequestException(
+        'No data rows found. Expected columns: username, role, project',
+      );
+    }
+
+    const results: BulkImportUserRowResultDto[] = [];
+    let createdCount = 0;
+    let errorCount = 0;
+
+    for (const row of rows) {
+      const result = await this.importSingleBulkRow(row);
+      results.push(result);
+      if (result.status === 'created') {
+        createdCount += 1;
+      } else {
+        errorCount += 1;
+      }
+    }
+
+    return {
+      totalRows: rows.length,
+      createdCount,
+      errorCount,
+      results,
+    };
+  }
+
+  private async importSingleBulkRow(
+    row: BulkImportRow,
+  ): Promise<BulkImportUserRowResultDto> {
+    const base = {
+      row: row.row,
+      username: row.username,
+      role: row.role || undefined,
+      project: row.project || undefined,
+    };
+
+    try {
+      if (!row.username.trim()) {
+        throw new BadRequestException('Username is required');
+      }
+
+      const username = normalizeUsername(row.username);
+      const roleName = row.role.trim().toUpperCase();
+
+      if (!VALID_IMPORT_ROLES.has(roleName)) {
+        throw new BadRequestException(
+          `Invalid role "${row.role}". Allowed: ${[...VALID_IMPORT_ROLES].join(', ')}`,
+        );
+      }
+
+      const role = roleName as RoleType;
+      const projectKey = row.project.trim();
+
+      if (role === RoleType.ADMIN && projectKey) {
+        throw new BadRequestException(
+          'Admin users must leave the project column empty',
+        );
+      }
+
+      if (role !== RoleType.ADMIN && !projectKey) {
+        throw new BadRequestException(
+          `Project is required for role ${role}`,
+        );
+      }
+
+      let projectIds: string[] | undefined;
+      if (projectKey) {
+        const project = await this.prisma.project.findFirst({
+          where: {
+            deletedAt: null,
+            isActive: true,
+            OR: [
+              { code: { equals: projectKey, mode: 'insensitive' } },
+              { name: { equals: projectKey, mode: 'insensitive' } },
+            ],
+          },
+          select: { id: true, code: true, name: true },
+        });
+
+        if (!project) {
+          throw new BadRequestException(
+            `Project "${projectKey}" not found or inactive`,
+          );
+        }
+
+        projectIds = [project.id];
+      }
+
+      await this.validateProjectAssignments(role, projectIds);
+
+      const existing = await this.prisma.user.findFirst({
+        where: { username, deletedAt: null },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new ConflictException(`Username "${username}" already exists`);
+      }
+
+      const roleRecord = await this.prisma.role.findFirst({
+        where: { name: role, deletedAt: null },
+      });
+      if (!roleRecord) {
+        throw new BadRequestException(`Role ${role} is not configured`);
+      }
+
+      const passwordHash = await bcrypt.hash(BULK_DEFAULT_PASSWORD, 12);
+      const fullName = username;
+
+      await this.prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            username,
+            email: null,
+            passwordHash,
+            fullName,
+            roleId: roleRecord.id,
+            telegramLinkToken: createTelegramLinkToken(),
+          },
+        });
+
+        if (projectIds?.length) {
+          await tx.userProject.createMany({
+            data: projectIds.map((projectId) => ({
+              userId: created.id,
+              projectId,
+            })),
+          });
+        }
+      });
+
+      return {
+        ...base,
+        username,
+        status: 'created',
+        message: 'User created successfully',
+        temporaryPassword: BULK_DEFAULT_PASSWORD,
+      };
+    } catch (error) {
+      let message = 'Failed to import row';
+      if (error instanceof Error) {
+        message = error.message;
+      }
+      return {
+        ...base,
+        status: 'error',
+        message,
+      };
+    }
+  }
+
+  private async parseBulkImportFile(
+    file: Express.Multer.File,
+  ): Promise<BulkImportRow[]> {
+    const originalName = (file.originalname || '').toLowerCase();
+    const isCsv =
+      originalName.endsWith('.csv') ||
+      file.mimetype === 'text/csv' ||
+      file.mimetype === 'application/csv';
+
+    if (isCsv) {
+      return this.parseBulkCsv(file.buffer.toString('utf8'));
+    }
+
+    if (
+      originalName.endsWith('.xlsx') ||
+      originalName.endsWith('.xls') ||
+      file.mimetype.includes('spreadsheet') ||
+      file.mimetype.includes('excel')
+    ) {
+      return this.parseBulkExcel(file.buffer);
+    }
+
+    throw new BadRequestException(
+      'Unsupported file type. Upload a .csv or .xlsx file',
+    );
+  }
+
+  private async parseBulkExcel(buffer: Buffer): Promise<BulkImportRow[]> {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Uint8Array.from(buffer) as never);
+    const sheet = workbook.worksheets[0];
+    if (!sheet) {
+      return [];
+    }
+
+    const headerRow = sheet.getRow(1);
+    const headers = [1, 2, 3].map((col) =>
+      String(headerRow.getCell(col).text || '')
+        .trim()
+        .toLowerCase(),
+    );
+
+    this.assertBulkHeaders(headers);
+
+    const rows: BulkImportRow[] = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const username = String(row.getCell(1).text || '').trim();
+      const role = String(row.getCell(2).text || '').trim();
+      const project = String(row.getCell(3).text || '').trim();
+      if (!username && !role && !project) return;
+      rows.push({ row: rowNumber, username, role, project });
+    });
+
+    return rows;
+  }
+
+  private parseBulkCsv(content: string): BulkImportRow[] {
+    const lines = content
+      .replace(/^\uFEFF/, '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) {
+      return [];
+    }
+
+    const headers = this.splitCsvLine(lines[0]!).map((h) => h.toLowerCase());
+    this.assertBulkHeaders(headers);
+
+    const rows: BulkImportRow[] = [];
+    for (let i = 1; i < lines.length; i += 1) {
+      const cols = this.splitCsvLine(lines[i]!);
+      const username = (cols[0] ?? '').trim();
+      const role = (cols[1] ?? '').trim();
+      const project = (cols[2] ?? '').trim();
+      if (!username && !role && !project) continue;
+      rows.push({ row: i + 1, username, role, project });
+    }
+
+    return rows;
+  }
+
+  private assertBulkHeaders(headers: string[]): void {
+    const normalized = headers.map((h) => h.replace(/[^a-z]/g, ''));
+    if (
+      normalized[0] !== 'username' ||
+      normalized[1] !== 'role' ||
+      normalized[2] !== 'project'
+    ) {
+      throw new BadRequestException(
+        'Invalid header. Expected: username, role, project',
+      );
+    }
+  }
+
+  private splitCsvLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i]!;
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+      if (char === ',' && !inQuotes) {
+        result.push(current);
+        current = '';
+        continue;
+      }
+      current += char;
+    }
+    result.push(current);
+    return result;
   }
 
   async update(
@@ -389,15 +688,18 @@ export class UsersService {
       return;
     }
 
-    if (!projectIds?.length) {
+    if (role === RoleType.USER) {
+      if (!projectIds?.length) {
+        return;
+      }
+      if (projectIds.length > 1) {
+        throw new BadRequestException(
+          'User role must be assigned to at most one project',
+        );
+      }
+    } else if (!projectIds?.length) {
       throw new BadRequestException(
         'At least one active project assignment is required',
-      );
-    }
-
-    if (role === RoleType.USER && projectIds.length !== 1) {
-      throw new BadRequestException(
-        'User role must be assigned to exactly one project',
       );
     }
 

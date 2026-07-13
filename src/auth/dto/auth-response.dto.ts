@@ -37,6 +37,32 @@ export class AuthUserDto {
   @ApiProperty()
   isActive!: boolean;
 
+  @ApiPropertyOptional({ nullable: true })
+  phoneNumber?: string | null;
+
+  @ApiPropertyOptional()
+  whatsappEnabled?: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  telegramChatId?: string | null;
+
+  @ApiPropertyOptional()
+  telegramEnabled?: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  telegramLinkToken?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Deep link to open Telegram bot and auto-link this account',
+  })
+  telegramDeepLink?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Whether telegramChatId is already linked',
+  })
+  telegramLinked?: boolean;
+
   @ApiPropertyOptional({ type: [AuthUserProjectDto] })
   projects?: AuthUserProjectDto[];
 }

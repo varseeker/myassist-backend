@@ -317,6 +317,198 @@ export class ProjectsService {
     return { message: 'Sprint deleted successfully' };
   }
 
+  async listMembers(
+    projectId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<
+    Array<{
+      id: string;
+      fullName: string;
+      username: string;
+      email: string | null;
+      role: RoleType;
+    }>
+  > {
+    await this.ensureProjectAccess(projectId, currentUser);
+    await this.findProjectOrThrow(projectId);
+
+    const members = await this.prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        userProjects: { some: { projectId } },
+      },
+      select: {
+        id: true,
+        fullName: true,
+        username: true,
+        email: true,
+        role: { select: { name: true } },
+      },
+      orderBy: { fullName: 'asc' },
+    });
+
+    return members.map((member) => ({
+      id: member.id,
+      fullName: member.fullName,
+      username: member.username,
+      email: member.email,
+      role: member.role.name,
+    }));
+  }
+
+  async assignMember(
+    projectId: string,
+    userId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    if (
+      currentUser.role !== RoleType.ADMIN &&
+      currentUser.role !== RoleType.QA
+    ) {
+      throw new ForbiddenException(
+        'Only admin or QA can assign users to projects',
+      );
+    }
+
+    await this.ensureProjectAccess(projectId, currentUser);
+    await this.findProjectOrThrow(projectId);
+
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null, isActive: true },
+      include: {
+        role: true,
+        userProjects: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role.name === RoleType.ADMIN) {
+      throw new BadRequestException('Admin users are not tied to projects');
+    }
+
+    const alreadyMember = user.userProjects.some(
+      (membership) => membership.projectId === projectId,
+    );
+    if (alreadyMember) {
+      return { message: 'User is already a member of this project' };
+    }
+
+    if (user.role.name === RoleType.USER && user.userProjects.length > 0) {
+      await this.prisma.$transaction([
+        this.prisma.userProject.deleteMany({ where: { userId } }),
+        this.prisma.userProject.create({
+          data: { userId, projectId },
+        }),
+      ]);
+      return {
+        message:
+          'User moved to this project (USER role allows one project only)',
+      };
+    }
+
+    await this.prisma.userProject.create({
+      data: { userId, projectId },
+    });
+
+    return { message: 'User assigned to project successfully' };
+  }
+
+  async listAssignableUsers(
+    projectId: string,
+    currentUser: AuthenticatedUser,
+    search?: string,
+  ): Promise<
+    Array<{
+      id: string;
+      fullName: string;
+      username: string;
+      email: string | null;
+      role: RoleType;
+      projectCount: number;
+    }>
+  > {
+    if (
+      currentUser.role !== RoleType.ADMIN &&
+      currentUser.role !== RoleType.QA
+    ) {
+      throw new ForbiddenException(
+        'Only admin or QA can list assignable users',
+      );
+    }
+
+    await this.ensureProjectAccess(projectId, currentUser);
+    await this.findProjectOrThrow(projectId);
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        role: { name: { not: RoleType.ADMIN } },
+        userProjects: { none: { projectId } },
+        ...(search
+          ? {
+              OR: [
+                { fullName: { contains: search, mode: 'insensitive' } },
+                { username: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        fullName: true,
+        username: true,
+        email: true,
+        role: { select: { name: true } },
+        _count: { select: { userProjects: true } },
+      },
+      orderBy: { fullName: 'asc' },
+      take: 100,
+    });
+
+    return users.map((user) => ({
+      id: user.id,
+      fullName: user.fullName,
+      username: user.username,
+      email: user.email,
+      role: user.role.name,
+      projectCount: user._count.userProjects,
+    }));
+  }
+
+  async removeMember(
+    projectId: string,
+    userId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    if (
+      currentUser.role !== RoleType.ADMIN &&
+      currentUser.role !== RoleType.QA
+    ) {
+      throw new ForbiddenException(
+        'Only admin or QA can remove users from projects',
+      );
+    }
+
+    await this.ensureProjectAccess(projectId, currentUser);
+    await this.findProjectOrThrow(projectId);
+
+    const deleted = await this.prisma.userProject.deleteMany({
+      where: { projectId, userId },
+    });
+
+    if (deleted.count === 0) {
+      throw new NotFoundException('Project membership not found');
+    }
+
+    return { message: 'User removed from project successfully' };
+  }
+
   private async ensureProjectAccess(
     projectId: string,
     currentUser: AuthenticatedUser,

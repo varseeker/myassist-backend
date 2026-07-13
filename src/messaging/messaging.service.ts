@@ -152,9 +152,9 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
           text:
             '👋 Selamat datang di *MyAssist Bot*.\n\n' +
             'Untuk menautkan akun:\n' +
-            '1. Minta admin membuka menu Users\n' +
-            '2. Salin “Telegram link” milik Anda\n' +
-            '3. Buka link tersebut, lalu tekan Start\n\n' +
+            '1. Buka menu Profile di MyAssist\n' +
+            '2. Klik “Hubungkan Telegram”\n' +
+            '3. Tekan Start di bot ini\n\n' +
             'Atau kirim manual: /link <token>',
           parse_mode: 'Markdown',
         });
@@ -171,7 +171,7 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
         await this.telegramChannel.apiCall('sendMessage', {
           chat_id: chatIdStr,
           text:
-            'Format salah.\n\nKirim: /link <token>\nContoh: /link ab12cd34\n\nToken didapat dari admin di halaman Users → Edit user → Telegram link.',
+            'Format salah.\n\nKirim: /link <token>\n\nToken ada di menu Profile → Telegram di MyAssist.',
         });
         return;
       }

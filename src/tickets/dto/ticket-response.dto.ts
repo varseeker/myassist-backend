@@ -105,6 +105,11 @@ export class TicketResponseDto {
   @ApiPropertyOptional({ enum: TicketStatus, isArray: true })
   availableTransitions?: TicketStatus[];
 
+  @ApiPropertyOptional({
+    description: 'Whether current user can change assignee while ASSIGNED',
+  })
+  canReassign?: boolean;
+
   @ApiPropertyOptional()
   project?: ProjectSummaryInTicketDto;
 

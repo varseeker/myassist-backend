@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -7,11 +8,17 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Response } from 'express';
-import { RoleType } from '@prisma/client';
+import { Prisma, RoleType } from '@prisma/client';
+import {
+  createTelegramLinkToken,
+  normalizePhoneNumber,
+} from '../messaging/messaging.utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import {
   AuthenticatedUser,
   JwtPayload,
@@ -48,6 +55,51 @@ export class AuthService {
     const tokens = await this.issueTokens(user, res);
 
     return tokens;
+  }
+
+  async register(dto: RegisterDto) {
+    const email = dto.email?.trim() ? dto.email.trim().toLowerCase() : null;
+    const username = normalizeUsername(dto.username);
+
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        deletedAt: null,
+        OR: [{ username }, ...(email ? [{ email }] : [])],
+      },
+    });
+
+    if (existingUser) {
+      if (email && existingUser.email === email) {
+        throw new ConflictException('Email is already registered');
+      }
+      throw new ConflictException('Username is already taken');
+    }
+
+    const role = await this.prisma.role.findFirst({
+      where: { name: RoleType.USER, deletedAt: null },
+    });
+
+    if (!role) {
+      throw new BadRequestException('USER role is not configured');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+
+    await this.prisma.user.create({
+      data: {
+        username,
+        email,
+        passwordHash,
+        fullName: dto.fullName.trim(),
+        roleId: role.id,
+        telegramLinkToken: createTelegramLinkToken(),
+      },
+    });
+
+    return {
+      message:
+        'Registration successful. Please sign in. An admin will assign you to a project.',
+    };
   }
 
   async logout(userId: string, refreshToken: string | undefined, res: Response) {
@@ -123,7 +175,105 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
+    if (!user.telegramLinkToken) {
+      const token = createTelegramLinkToken();
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { telegramLinkToken: token },
+      });
+      user.telegramLinkToken = token;
+    }
+
     return this.mapUser(user);
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null, isActive: true },
+      include: { role: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const data: Prisma.UserUpdateInput = {};
+
+    if (dto.username !== undefined) {
+      const username = normalizeUsername(dto.username);
+      const taken = await this.prisma.user.findFirst({
+        where: {
+          username,
+          deletedAt: null,
+          NOT: { id: userId },
+        },
+        select: { id: true },
+      });
+      if (taken) {
+        throw new ConflictException('Username is already taken');
+      }
+      data.username = username;
+    }
+
+    if (dto.email !== undefined) {
+      if (dto.email === null) {
+        data.email = null;
+      } else {
+        const email = dto.email.trim().toLowerCase();
+        const taken = await this.prisma.user.findFirst({
+          where: {
+            email,
+            deletedAt: null,
+            NOT: { id: userId },
+          },
+          select: { id: true },
+        });
+        if (taken) {
+          throw new ConflictException('Email is already registered');
+        }
+        data.email = email;
+      }
+    }
+
+    if (dto.fullName !== undefined) {
+      data.fullName = dto.fullName.trim();
+    }
+
+    if (dto.phoneNumber !== undefined) {
+      if (dto.phoneNumber === null) {
+        data.phoneNumber = null;
+      } else {
+        const normalized = normalizePhoneNumber(dto.phoneNumber);
+        if (!normalized) {
+          throw new BadRequestException('Invalid phone number format');
+        }
+        data.phoneNumber = normalized;
+      }
+    }
+
+    if (dto.whatsappEnabled !== undefined) {
+      data.whatsappEnabled = dto.whatsappEnabled;
+    }
+
+    if (dto.telegramChatId !== undefined) {
+      data.telegramChatId =
+        dto.telegramChatId === null ? null : dto.telegramChatId.trim();
+    }
+
+    if (dto.telegramEnabled !== undefined) {
+      data.telegramEnabled = dto.telegramEnabled;
+    }
+
+    if (!user.telegramLinkToken) {
+      data.telegramLinkToken = createTelegramLinkToken();
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+
+    return this.getProfile(userId);
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
@@ -301,6 +451,11 @@ export class AuthService {
     fullName: string;
     roleId: string;
     isActive: boolean;
+    phoneNumber?: string | null;
+    whatsappEnabled?: boolean;
+    telegramChatId?: string | null;
+    telegramEnabled?: boolean;
+    telegramLinkToken?: string | null;
     role: { name: RoleType };
     userProjects?: Array<{
       project: {
@@ -312,6 +467,14 @@ export class AuthService {
       };
     }>;
   }) {
+    const botUsername =
+      this.configService.get<string>('TELEGRAM_BOT_USERNAME')?.trim() || null;
+    const telegramLinkToken = user.telegramLinkToken ?? null;
+    const telegramDeepLink =
+      botUsername && telegramLinkToken
+        ? `https://t.me/${botUsername}?start=${telegramLinkToken}`
+        : null;
+
     return {
       id: user.id,
       username: user.username,
@@ -320,6 +483,13 @@ export class AuthService {
       roleId: user.roleId,
       role: user.role.name,
       isActive: user.isActive,
+      phoneNumber: user.phoneNumber ?? null,
+      whatsappEnabled: user.whatsappEnabled ?? true,
+      telegramChatId: user.telegramChatId ?? null,
+      telegramEnabled: user.telegramEnabled ?? true,
+      telegramLinkToken,
+      telegramDeepLink,
+      telegramLinked: Boolean(user.telegramChatId),
       projects: user.userProjects
         ?.filter((item) => item.project.deletedAt === null)
         .map((item) => ({
