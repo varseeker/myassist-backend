@@ -753,6 +753,7 @@ export class TicketsService {
       deskripsi: ticket.description,
       reporter: ticket.createdBy.fullName,
       assignee: ticket.assignedTo?.fullName ?? '',
+      createdAt: ticket.createdAt.toISOString(),
       lastUpdate: ticket.updatedAt.toISOString(),
     }));
 
@@ -776,6 +777,7 @@ export class TicketsService {
         { header: 'Deskripsi', key: 'deskripsi', width: 40 },
         { header: 'Reporter', key: 'reporter', width: 20 },
         { header: 'Assignee', key: 'assignee', width: 20 },
+        { header: 'Created At', key: 'createdAt', width: 24 },
         { header: 'Last Update', key: 'lastUpdate', width: 24 },
       ];
       sheet.getRow(1).font = { bold: true };
@@ -801,6 +803,7 @@ export class TicketsService {
       'Deskripsi',
       'Reporter',
       'Assignee',
+      'Created At',
       'Last Update',
     ];
 
@@ -818,6 +821,7 @@ export class TicketsService {
           row.deskripsi,
           row.reporter,
           row.assignee,
+          row.createdAt,
           row.lastUpdate,
         ]
           .map((value) => this.escapeCsv(String(value ?? '')))
