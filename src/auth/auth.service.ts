@@ -30,6 +30,7 @@ import {
   parseExpiresIn,
 } from './utils/token.util';
 import { normalizeUsername } from '../common/utils/username.util';
+import { releaseSoftDeletedUniqueConflicts } from '../users/user-unique.util';
 
 @Injectable()
 export class AuthService {
@@ -60,6 +61,8 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const email = dto.email?.trim() ? dto.email.trim().toLowerCase() : null;
     const username = normalizeUsername(dto.username);
+
+    await releaseSoftDeletedUniqueConflicts(this.prisma, { username, email });
 
     const existingUser = await this.prisma.user.findFirst({
       where: {
@@ -201,6 +204,7 @@ export class AuthService {
 
     if (dto.username !== undefined) {
       const username = normalizeUsername(dto.username);
+      await releaseSoftDeletedUniqueConflicts(this.prisma, { username });
       const taken = await this.prisma.user.findFirst({
         where: {
           username,
@@ -220,6 +224,7 @@ export class AuthService {
         data.email = null;
       } else {
         const email = dto.email.trim().toLowerCase();
+        await releaseSoftDeletedUniqueConflicts(this.prisma, { email });
         const taken = await this.prisma.user.findFirst({
           where: {
             email,

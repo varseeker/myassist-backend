@@ -22,6 +22,12 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserQueryDto } from './dto/user-query.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import {
+  buildDeletedEmail,
+  buildDeletedTelegramToken,
+  buildDeletedUsername,
+  releaseSoftDeletedUniqueConflicts,
+} from './user-unique.util';
 
 type UserWithRole = Prisma.UserGetPayload<{
   include: {
@@ -111,6 +117,8 @@ export class UsersService {
   async create(dto: CreateUserDto): Promise<UserResponseDto> {
     const email = dto.email?.trim() ? dto.email.trim().toLowerCase() : null;
     const username = normalizeUsername(dto.username);
+
+    await releaseSoftDeletedUniqueConflicts(this.prisma, { username, email });
 
     const existingUser = await this.prisma.user.findFirst({
       where: {
@@ -283,6 +291,8 @@ export class UsersService {
       }
 
       await this.validateProjectAssignments(role, projectIds);
+
+      await releaseSoftDeletedUniqueConflicts(this.prisma, { username });
 
       const existing = await this.prisma.user.findFirst({
         where: { username, deletedAt: null },
@@ -488,6 +498,7 @@ export class UsersService {
 
     if (dto.username !== undefined) {
       const username = normalizeUsername(dto.username);
+      await releaseSoftDeletedUniqueConflicts(this.prisma, { username });
       const taken = await this.prisma.user.findFirst({
         where: {
           username,
@@ -509,6 +520,7 @@ export class UsersService {
           : dto.email.trim().toLowerCase();
 
       if (email) {
+        await releaseSoftDeletedUniqueConflicts(this.prisma, { email });
         const taken = await this.prisma.user.findFirst({
           where: {
             email,
@@ -632,9 +644,20 @@ export class UsersService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id },
-        data: { deletedAt: new Date(), isActive: false },
+        data: {
+          deletedAt: new Date(),
+          isActive: false,
+          // Free unique constraints so username/email can be reused
+          username: buildDeletedUsername(user.username, user.id),
+          email: user.email
+            ? buildDeletedEmail(user.email, user.id)
+            : null,
+          telegramLinkToken: buildDeletedTelegramToken(user.id),
+          telegramChatId: null,
+        },
       }),
       this.prisma.refreshToken.deleteMany({ where: { userId: id } }),
+      this.prisma.userProject.deleteMany({ where: { userId: id } }),
     ]);
 
     return { message: 'User deleted successfully' };
