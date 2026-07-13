@@ -9,6 +9,9 @@ export class CommentUserDto {
   @ApiProperty()
   fullName!: string;
 
+  @ApiProperty()
+  username!: string;
+
   @ApiProperty({ nullable: true, type: String })
   email!: string | null;
 
@@ -58,6 +61,9 @@ export class MentionableUserDto {
 
   @ApiProperty()
   fullName!: string;
+
+  @ApiProperty()
+  username!: string;
 
   @ApiProperty({ nullable: true, type: String })
   email!: string | null;

@@ -3,8 +3,8 @@ import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class CreateCommentDto {
   @ApiProperty({
-    example: 'Please check this @dev@myassist.local',
-    description: 'Use @email to mention a user',
+    example: 'Please check this @dev',
+    description: 'Use @username to mention a user',
   })
   @IsString()
   @IsNotEmpty()

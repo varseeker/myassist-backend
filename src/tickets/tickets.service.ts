@@ -359,6 +359,7 @@ export class TicketsService {
     let mentionUser: {
       id: string;
       fullName: string;
+      username: string;
       email: string | null;
     } | null = null;
 
@@ -456,9 +457,7 @@ export class TicketsService {
       });
 
       if (nextStatus === TicketStatus.RESOLVED && mentionUser) {
-        const mentionTag = mentionUser.email
-          ? `@${mentionUser.email}`
-          : `@${mentionUser.fullName}`;
+        const mentionTag = `@${mentionUser.username}`;
         const noteSuffix = noteValue ? ` Catatan QA: ${noteValue}` : '';
         await tx.ticketComment.create({
           data: {
@@ -943,7 +942,12 @@ export class TicketsService {
   private async validateMentionUser(
     userId: string,
     projectId: string,
-  ): Promise<{ id: string; fullName: string; email: string | null }> {
+  ): Promise<{
+    id: string;
+    fullName: string;
+    username: string;
+    email: string | null;
+  }> {
     const user = await this.prisma.user.findFirst({
       where: {
         id: userId,
@@ -961,7 +965,7 @@ export class TicketsService {
           },
         ],
       },
-      select: { id: true, fullName: true, email: true },
+      select: { id: true, fullName: true, username: true, email: true },
     });
 
     if (!user) {

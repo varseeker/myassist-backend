@@ -59,7 +59,7 @@ export class CommentsController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Add a comment (use @email to mention users)' })
+  @ApiOperation({ summary: 'Add a comment (use @username to mention users)' })
   create(
     @Param('ticketId', ParseUUIDPipe) ticketId: string,
     @Body() dto: CreateCommentDto,

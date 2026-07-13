@@ -24,7 +24,7 @@ import {
 } from './dto/comment-response.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
-import { extractMentionEmails } from './utils/mention.util';
+import { extractMentionUsernames } from './utils/mention.util';
 
 type CommentWithUser = Prisma.TicketCommentGetPayload<{
   include: { user: { include: { role: true } } };
@@ -201,25 +201,26 @@ export class CommentsService {
       participantIds.push(ticket.assignedToId);
     }
 
+    const searchFilter: Prisma.UserWhereInput | undefined = search
+      ? {
+          OR: [
+            { username: { contains: search, mode: 'insensitive' } },
+            { fullName: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : undefined;
+
     const where: Prisma.UserWhereInput = {
       deletedAt: null,
       isActive: true,
-      email: { not: null },
       id: { not: currentUser.id },
-      ...(search
-        ? {
-            OR: [
-              { email: { contains: search, mode: 'insensitive' } },
-              { fullName: { contains: search, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
+      ...(searchFilter ?? {}),
     };
 
     if (currentUser.role === RoleType.ADMIN || currentUser.role === RoleType.QA) {
       const users = await this.prisma.user.findMany({
         where,
-        select: { id: true, fullName: true, email: true },
+        select: { id: true, fullName: true, username: true, email: true },
         orderBy: { fullName: 'asc' },
         take: 10,
       });
@@ -231,7 +232,6 @@ export class CommentsService {
       where: {
         deletedAt: null,
         isActive: true,
-        email: { not: null },
         id: { not: currentUser.id },
         AND: [
           {
@@ -240,29 +240,10 @@ export class CommentsService {
               { role: { name: { in: [RoleType.ADMIN, RoleType.QA] } } },
             ],
           },
-          ...(search
-            ? [
-                {
-                  OR: [
-                    {
-                      email: {
-                        contains: search,
-                        mode: 'insensitive' as const,
-                      },
-                    },
-                    {
-                      fullName: {
-                        contains: search,
-                        mode: 'insensitive' as const,
-                      },
-                    },
-                  ],
-                },
-              ]
-            : []),
+          ...(searchFilter ? [searchFilter] : []),
         ],
       },
-      select: { id: true, fullName: true, email: true },
+      select: { id: true, fullName: true, username: true, email: true },
       orderBy: { fullName: 'asc' },
       take: 10,
     });
@@ -307,15 +288,17 @@ export class CommentsService {
   }
 
   private async resolveMentions(content: string): Promise<CommentUserDto[]> {
-    const emails = extractMentionEmails(content);
+    const usernames = extractMentionUsernames(content);
 
-    if (emails.length === 0) {
+    if (usernames.length === 0) {
       return [];
     }
 
     const users = await this.prisma.user.findMany({
       where: {
-        email: { in: emails },
+        OR: usernames.map((username) => ({
+          username: { equals: username, mode: 'insensitive' as const },
+        })),
         deletedAt: null,
         isActive: true,
       },
@@ -328,40 +311,39 @@ export class CommentsService {
   private async resolveMentionsForComments(
     contents: string[],
   ): Promise<Map<string, CommentUserDto[]>> {
-    const allEmails = new Set<string>();
+    const allUsernames = new Set<string>();
 
     for (const content of contents) {
-      for (const email of extractMentionEmails(content)) {
-        allEmails.add(email);
+      for (const username of extractMentionUsernames(content)) {
+        allUsernames.add(username);
       }
     }
 
-    if (allEmails.size === 0) {
+    if (allUsernames.size === 0) {
       return new Map();
     }
 
     const users = await this.prisma.user.findMany({
       where: {
-        email: { in: [...allEmails] },
+        OR: [...allUsernames].map((username) => ({
+          username: { equals: username, mode: 'insensitive' as const },
+        })),
         deletedAt: null,
         isActive: true,
       },
       include: userInclude,
     });
 
-    const usersByEmail = new Map(
-      users.map((user) => [
-        (user.email ?? '').toLowerCase(),
-        this.mapUser(user),
-      ]),
+    const usersByUsername = new Map(
+      users.map((user) => [user.username.toLowerCase(), this.mapUser(user)]),
     );
 
     const result = new Map<string, CommentUserDto[]>();
 
     for (const content of contents) {
-      const emails = extractMentionEmails(content);
-      const mentions = emails
-        .map((email) => usersByEmail.get(email))
+      const usernames = extractMentionUsernames(content);
+      const mentions = usernames
+        .map((username) => usersByUsername.get(username))
         .filter((user): user is CommentUserDto => Boolean(user));
 
       result.set(content, mentions);
@@ -376,6 +358,7 @@ export class CommentsService {
     return {
       id: user.id,
       fullName: user.fullName,
+      username: user.username,
       email: user.email ?? '',
       role: user.role.name,
     };
