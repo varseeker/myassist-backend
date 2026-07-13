@@ -497,7 +497,14 @@ export class TicketsService {
     await this.prisma.$transaction([
       this.prisma.ticket.update({
         where: { id: ticket.id },
-        data: { deletedAt: new Date() },
+        data: {
+          deletedAt: new Date(),
+          // Free unique ticketNumber so sequences can restart / reuse
+          ticketNumber: this.buildDeletedTicketNumber(
+            ticket.ticketNumber,
+            ticket.id,
+          ),
+        },
       }),
       this.prisma.ticketHistory.create({
         data: {
@@ -505,6 +512,9 @@ export class TicketsService {
           userId: currentUser.id,
           action: 'TICKET_DELETED',
           fromStatus: ticket.status,
+          metadata: {
+            previousTicketNumber: ticket.ticketNumber,
+          },
         },
       }),
     ]);
@@ -538,28 +548,49 @@ export class TicketsService {
       throw new BadRequestException('No tickets selected for deletion');
     }
 
+    const tickets = await this.prisma.ticket.findMany({
+      where: {
+        id: { in: uniqueIds },
+        deletedAt: null,
+      },
+      select: { id: true, ticketNumber: true, status: true },
+    });
+
+    if (tickets.length === 0) {
+      throw new BadRequestException('No tickets selected for deletion');
+    }
+
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      await tx.ticket.updateMany({
-        where: {
-          id: { in: uniqueIds },
-          deletedAt: null,
-        },
-        data: { deletedAt: now },
-      });
+      for (const ticket of tickets) {
+        await tx.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            deletedAt: now,
+            ticketNumber: this.buildDeletedTicketNumber(
+              ticket.ticketNumber,
+              ticket.id,
+            ),
+          },
+        });
+      }
 
       await tx.ticketHistory.createMany({
-        data: uniqueIds.map((ticketId) => ({
-          ticketId,
+        data: tickets.map((ticket) => ({
+          ticketId: ticket.id,
           userId: currentUser.id,
           action: 'TICKET_DELETED',
+          fromStatus: ticket.status,
+          metadata: {
+            previousTicketNumber: ticket.ticketNumber,
+          },
         })),
       });
     });
 
     return {
-      message: `${uniqueIds.length} ticket(s) deleted successfully`,
-      deletedCount: uniqueIds.length,
+      message: `${tickets.length} ticket(s) deleted successfully`,
+      deletedCount: tickets.length,
     };
   }
 
@@ -1025,8 +1056,12 @@ export class TicketsService {
 
     const prefix = `${projectCode}-${sprintKey}-`;
 
+    // Free numbers still held by old soft-deleted tickets (pre-fix data)
+    await this.releaseSoftDeletedTicketNumbers(prefix);
+
     const lastTicket = await this.prisma.ticket.findFirst({
       where: {
+        deletedAt: null,
         ticketNumber: { startsWith: prefix },
         ...(excludeTicketId ? { id: { not: excludeTicketId } } : {}),
       },
@@ -1040,6 +1075,38 @@ export class TicketsService {
     const nextSeq = Number.isFinite(lastSeq) ? lastSeq + 1 : 1;
 
     return `${prefix}${String(nextSeq).padStart(7, '0')}`;
+  }
+
+  private async releaseSoftDeletedTicketNumbers(prefix: string): Promise<void> {
+    const conflicts = await this.prisma.ticket.findMany({
+      where: {
+        deletedAt: { not: null },
+        ticketNumber: { startsWith: prefix },
+        NOT: { ticketNumber: { contains: '__del__' } },
+      },
+      select: { id: true, ticketNumber: true },
+      take: 5_000,
+    });
+
+    for (const ticket of conflicts) {
+      await this.prisma.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          ticketNumber: this.buildDeletedTicketNumber(
+            ticket.ticketNumber,
+            ticket.id,
+          ),
+        },
+      });
+    }
+  }
+
+  private buildDeletedTicketNumber(
+    ticketNumber: string,
+    id: string,
+  ): string {
+    const suffix = `__del__${id.replace(/-/g, '').slice(0, 12)}`;
+    return `${ticketNumber}${suffix}`;
   }
 
   private resolveSprintKey(sprintName: string | null): string {
