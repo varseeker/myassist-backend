@@ -37,7 +37,6 @@ type BulkImportRow = {
   project: string;
 };
 
-const BULK_DEFAULT_PASSWORD = 'ChangeMe123!';
 const VALID_IMPORT_ROLES = new Set<string>(Object.values(RoleType));
 
 @Injectable()
@@ -300,7 +299,8 @@ export class UsersService {
         throw new BadRequestException(`Role ${role} is not configured`);
       }
 
-      const passwordHash = await bcrypt.hash(BULK_DEFAULT_PASSWORD, 12);
+      const password = `${username}1234`;
+      const passwordHash = await bcrypt.hash(password, 12);
       const fullName = username;
 
       await this.prisma.$transaction(async (tx) => {
@@ -330,7 +330,7 @@ export class UsersService {
         username,
         status: 'created',
         message: 'User created successfully',
-        temporaryPassword: BULK_DEFAULT_PASSWORD,
+        temporaryPassword: password,
       };
     } catch (error) {
       let message = 'Failed to import row';
