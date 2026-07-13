@@ -32,6 +32,22 @@ type ProjectRecord = Prisma.ProjectGetPayload<{
 
 type SprintRecord = Prisma.SprintGetPayload<Record<string, never>>;
 
+const PROJECT_COUNT_INCLUDE = {
+  _count: {
+    select: {
+      sprints: { where: { deletedAt: null } },
+      userProjects: {
+        where: {
+          user: {
+            deletedAt: null,
+            isActive: true,
+          },
+        },
+      },
+    },
+  },
+} as const;
+
 @Injectable()
 export class ProjectsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -66,14 +82,7 @@ export class ProjectsService {
     const [projects, total] = await this.prisma.$transaction([
       this.prisma.project.findMany({
         where,
-        include: {
-          _count: {
-            select: {
-              sprints: { where: { deletedAt: null } },
-              userProjects: true,
-            },
-          },
-        },
+        include: PROJECT_COUNT_INCLUDE,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -118,14 +127,7 @@ export class ProjectsService {
         description: dto.description?.trim(),
         isActive: dto.isActive ?? true,
       },
-      include: {
-        _count: {
-          select: {
-            sprints: { where: { deletedAt: null } },
-            userProjects: true,
-          },
-        },
-      },
+      include: PROJECT_COUNT_INCLUDE,
     });
 
     return this.mapProject(project);
@@ -159,14 +161,7 @@ export class ProjectsService {
           : {}),
         ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
       },
-      include: {
-        _count: {
-          select: {
-            sprints: { where: { deletedAt: null } },
-            userProjects: true,
-          },
-        },
-      },
+      include: PROJECT_COUNT_INCLUDE,
     });
 
     return this.mapProject(project);
@@ -533,14 +528,7 @@ export class ProjectsService {
   private async findProjectOrThrow(id: string): Promise<ProjectRecord> {
     const project = await this.prisma.project.findFirst({
       where: { id, deletedAt: null },
-      include: {
-        _count: {
-          select: {
-            sprints: { where: { deletedAt: null } },
-            userProjects: true,
-          },
-        },
-      },
+      include: PROJECT_COUNT_INCLUDE,
     });
 
     if (!project) {
