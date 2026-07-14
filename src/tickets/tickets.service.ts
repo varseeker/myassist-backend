@@ -452,6 +452,9 @@ export class TicketsService {
             actorRole: currentUser.role,
             mentionUserId: dto.mentionUserId,
             mentionUserName: mentionUser?.fullName,
+            ...(ticket.status === TicketStatus.USER_INPUT
+              ? { inputUserName: ticket.createdBy.fullName }
+              : {}),
           },
         },
       });
