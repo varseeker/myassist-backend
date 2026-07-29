@@ -90,6 +90,14 @@ export class TicketsController {
     return this.ticketsService.getReporters(currentUser);
   }
 
+  @Get('filter-options')
+  @ApiOperation({
+    summary: 'Statuses and assignees available for ticket filters',
+  })
+  getFilterOptions(@CurrentUser() currentUser: AuthenticatedUser) {
+    return this.ticketsService.getFilterOptions(currentUser);
+  }
+
   @Get('export')
   @Roles(RoleType.ADMIN, RoleType.QA, RoleType.DEVELOPER)
   @ApiOperation({ summary: 'Export tickets for a sprint as CSV or Excel' })

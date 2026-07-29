@@ -3,6 +3,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { AuthModule } from './auth/auth.module';
+import { ClientsModule } from './clients/clients.module';
 import { CommentsModule } from './comments/comments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -35,6 +36,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     RolesModule,
     ProjectsModule,
+    ClientsModule,
     TicketsModule,
     CommentsModule,
     AttachmentsModule,

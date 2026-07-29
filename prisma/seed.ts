@@ -140,6 +140,54 @@ async function main() {
     'Seeded users:',
     defaultUsers.map((u) => `${u.username} / ${u.email} (${u.role})`).join(', '),
   );
+
+  const clients = [
+    {
+      name: 'Net Fashion Indonesia',
+      companyName: 'PT NET PERSADA INDONESIA',
+      description:
+        'PT NET PERSADA INDONESIA, kami adalah perusahan yang fokus dalam memproduksi kaos polos dengan bahan TERBAIK dan TERJAMIN kualitasnya (ASLI) dan pastinya dengan harga TERMURAH di Indonesia.',
+      logoUrl: '/clients/net-fashion-indonesia.png',
+      sortOrder: 1,
+    },
+    {
+      name: 'KSU Mitra Saudara',
+      companyName: 'Koperasi Serba Usaha Mitra Saudara',
+      description:
+        'Koperasi Serba Usaha (KSU) Mitra Saudara didirikan di Bandung, pada tanggal 16 Februari 1999 oleh 45 orang pendiri. KSU Mitra Saudara merupakan koperasi karyawan PT Bank Himpunan Saudara 1906 (sekarang PT. Bank Woori Saudara Indonesia 1906,Tbk) dan merupakan mitra utama dalam memenuhi kebutuhan internal Bank Woori Saudara di seluruh cabangnya.',
+      logoUrl: '/clients/ksu-mitra-saudara.png',
+      sortOrder: 2,
+    },
+  ];
+
+  for (const client of clients) {
+    const existing = await prisma.client.findFirst({
+      where: { name: client.name, deletedAt: null },
+    });
+
+    if (existing) {
+      await prisma.client.update({
+        where: { id: existing.id },
+        data: {
+          companyName: client.companyName,
+          description: client.description,
+          logoUrl: client.logoUrl,
+          sortOrder: client.sortOrder,
+          isActive: true,
+          deletedAt: null,
+        },
+      });
+    } else {
+      await prisma.client.create({
+        data: {
+          ...client,
+          isActive: true,
+        },
+      });
+    }
+  }
+
+  console.log('Seeded clients:', clients.map((c) => c.name).join(', '));
 }
 
 main()

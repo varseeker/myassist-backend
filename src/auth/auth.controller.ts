@@ -28,6 +28,7 @@ import {
   ForgotPasswordResponseDto,
   MessageResponseDto,
 } from './dto/auth-response.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -109,6 +110,17 @@ export class AuthController {
     @Body() dto: UpdateProfileDto,
   ): Promise<AuthUserDto> {
     return this.authService.updateProfile(user.id, dto);
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password for the current user' })
+  changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<MessageResponseDto> {
+    return this.authService.changePassword(user.id, dto);
   }
 
   @Public()

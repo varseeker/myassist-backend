@@ -705,6 +705,68 @@ export class TicketsService {
     );
   }
 
+  async getFilterOptions(currentUser: AuthenticatedUser): Promise<{
+    statuses: TicketStatus[];
+    assignees: AssigneeResponseDto[];
+  }> {
+    const projectIds = await getUserProjectIds(
+      this.prisma,
+      currentUser.id,
+      currentUser.role,
+    );
+
+    const where: Prisma.TicketWhereInput = {
+      deletedAt: null,
+      ...(projectIds !== 'all' ? { projectId: { in: projectIds } } : {}),
+    };
+
+    const [statusRows, assigneeTickets] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where,
+        select: { status: true },
+        distinct: ['status'],
+      }),
+      this.prisma.ticket.findMany({
+        where: {
+          ...where,
+          assignedToId: { not: null },
+        },
+        select: {
+          assignedToId: true,
+          assignedTo: {
+            select: { id: true, fullName: true, email: true },
+          },
+        },
+      }),
+    ]);
+
+    const statusOrder = Object.values(TicketStatus);
+    const statuses = statusRows
+      .map((row) => row.status)
+      .sort((a, b) => statusOrder.indexOf(a) - statusOrder.indexOf(b));
+
+    const assigneesById = new Map<string, AssigneeResponseDto>();
+    for (const ticket of assigneeTickets) {
+      if (!ticket.assignedToId || !ticket.assignedTo) {
+        continue;
+      }
+      if (!assigneesById.has(ticket.assignedToId)) {
+        assigneesById.set(ticket.assignedToId, {
+          id: ticket.assignedTo.id,
+          fullName: ticket.assignedTo.fullName,
+          email: ticket.assignedTo.email ?? '',
+        });
+      }
+    }
+
+    return {
+      statuses,
+      assignees: [...assigneesById.values()].sort((a, b) =>
+        a.fullName.localeCompare(b.fullName),
+      ),
+    };
+  }
+
   async exportBySprint(
     query: TicketExportQueryDto,
     currentUser: AuthenticatedUser,

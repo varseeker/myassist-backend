@@ -334,3 +334,21 @@ model UserProject {
   @@index([projectId])
   @@map("user_projects")
 }
+
+model Client {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  companyName String?   @map("company_name")
+  description String    @db.Text
+  logoUrl     String?   @map("logo_url")
+  logoPath    String?   @map("logo_path")
+  websiteUrl  String?   @map("website_url")
+  sortOrder   Int       @default(0) @map("sort_order")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  @@index([isActive, sortOrder])
+  @@map("clients")
+}
