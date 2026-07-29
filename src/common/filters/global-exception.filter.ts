@@ -43,8 +43,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
-      const fallback =
-        STATUS_HINTS[status] ?? `Permintaan gagal (HTTP ${status}).`;
+      const isAuthCredentialFailure =
+        status === HttpStatus.UNAUTHORIZED &&
+        (request.url.includes('/auth/login') ||
+          request.url.includes('/auth/register'));
+      const fallback = isAuthCredentialFailure
+        ? 'Username atau password salah'
+        : (STATUS_HINTS[status] ?? `Permintaan gagal (HTTP ${status}).`);
 
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
