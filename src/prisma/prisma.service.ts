@@ -4,7 +4,10 @@ import { ModuleRef } from '@nestjs/core';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { PrismaClient } from '@prisma/client';
-import { OpsAlertService } from '../ops-alert/ops-alert.service';
+
+type OpsAlertLike = {
+  alertDatabase: (error: unknown) => Promise<void>;
+};
 
 @Injectable()
 export class PrismaService
@@ -47,8 +50,16 @@ export class PrismaService
     await this.pool.end();
   }
 
-  private getOpsAlert(): OpsAlertService | undefined {
+  /**
+   * Lazy-resolve OpsAlertService to avoid a circular import with ops-alert.service.ts
+   * (which depends on PrismaService).
+   */
+  private getOpsAlert(): OpsAlertLike | undefined {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { OpsAlertService } = require('../ops-alert/ops-alert.service') as {
+        OpsAlertService: new (...args: never[]) => OpsAlertLike;
+      };
       return this.moduleRef.get(OpsAlertService, { strict: false });
     } catch {
       return undefined;
