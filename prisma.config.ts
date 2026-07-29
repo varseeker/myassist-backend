@@ -10,7 +10,8 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    // Migrations use session pooler (DIRECT_URL) when direct IPv6 host is unreachable
+    // ALWAYS prefer DIRECT_URL (Session pooler :5432 or db.<ref>.supabase.co).
+    // Transaction pooler (:6543) cannot run migrations reliably.
     url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
   },
 });

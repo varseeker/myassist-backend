@@ -23,7 +23,9 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
     "prisma:studio": "prisma studio",
-    "db:test-connection": "ts-node scripts/test-db-connection.ts"
+    "db:test-connection": "tsx scripts/test-db-connection.ts",
+    "db:preflight": "tsx scripts/check-db-preflight.ts",
+    "build:render": "prisma generate && nest build && npm run db:preflight && prisma migrate deploy"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

@@ -25,7 +25,7 @@ git push -u origin main
 4. Jika pakai **Blueprint**, Render membaca `render.yaml` otomatis
 5. Jika manual:
    - **Runtime:** Node
-   - **Build Command:** `npm install --include=dev && npx prisma generate && npm run build && npx prisma migrate deploy`
+   - **Build Command:** `npm install --include=dev && npm run build:render`
    - **Start Command:** `npm run start:prod`
    - **Health Check Path:** `/api/v1/health`
    - **Region:** Singapore (dekat Supabase `ap-southeast-1`)
@@ -85,10 +85,25 @@ npx prisma db seed
 | Masalah | Solusi |
 |---------|--------|
 | Build gagal `nest: not found` | `NODE_ENV=production` skip devDeps — pakai `npm install --include=dev` di build command |
-| Build gagal Prisma | Pastikan `DATABASE_URL` & `DIRECT_URL` sudah di-set |
+| Build gagal `tenant/user postgres.xxx not found` | **Env Supabase salah / project paused.** Buka Supabase → Connect → Connection pooling, salin ulang host (bisa `aws-0-...` atau `aws-1-...`). Set `DIRECT_URL` = Session `:5432`, `DATABASE_URL` = Transaction `:6543?pgbouncer=true`. Username pooler = `postgres.<PROJECT_REF>`. Pastikan project tidak di-pause. Uji lokal: `npm run db:test-connection` lalu `npm run db:preflight` |
+| Build gagal Prisma lain | Pastikan `DATABASE_URL` & `DIRECT_URL` sudah di-set di Render **tanpa** tanda kutip |
 | Bucket not found | Pastikan `SUPABASE_SERVICE_ROLE_KEY` valid; bucket dibuat otomatis saat startup |
 | CORS error | Update `CORS_ORIGIN` dengan URL frontend yang benar |
 | Cold start lambat | Normal di plan Free Render (~30 detik) |
+
+### Format URL yang benar (Supabase)
+
+Jangan menebak host. Salin dari dashboard:
+
+```text
+# Runtime (NestJS / Prisma Client)
+DATABASE_URL=postgresql://postgres.<REF>:<PASSWORD>@aws-X-<REGION>.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require
+
+# Migrations (prisma migrate deploy)
+DIRECT_URL=postgresql://postgres.<REF>:<PASSWORD>@aws-X-<REGION>.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+Error `FATAL: tenant/user postgres.<REF> not found` artinya host pooler tidak mengenal project itu (salah region/shard, project diganti, atau project di-pause) — perbaiki env di Render, bukan kode TypeScript.
 
 ---
 
