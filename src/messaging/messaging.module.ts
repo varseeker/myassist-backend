@@ -13,6 +13,6 @@ import { MessagingService } from './messaging.service';
     TelegramChannel,
     MessagingService,
   ],
-  exports: [MessagingService],
+  exports: [MessagingService, TelegramChannel],
 })
 export class MessagingModule {}

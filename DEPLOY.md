@@ -123,6 +123,22 @@ Error `FATAL: tenant/user postgres.<REF> not found` artinya host pooler tidak me
 | `MESSAGING_TELEGRAM_ENABLED` | `true` / `false` |
 | `TELEGRAM_BOT_TOKEN` | Dari @BotFather |
 | `TELEGRAM_BOT_USERNAME` | Username bot tanpa `@` |
+| `OPS_ALERT_ENABLED` | `true` / `false` — alert ops ke Telegram admin |
+| `OPS_ALERT_COOLDOWN_MS` | Anti-spam (default `300000` = 5 menit) |
+| `OPS_ALERT_TELEGRAM_CHAT_IDS` | Opsional chat ID ekstra (comma-separated) |
+| `OPS_ALERT_NOTIFY_STARTUP` | `true` untuk alert saat API start (default `false`) |
+
+### Ops alerts (Telegram admin)
+
+Backend mengirim notifikasi Telegram ke **user role ADMIN** yang sudah menautkan Telegram, saat:
+
+- HTTP 5xx / error server
+- Database disconnect / health gagal
+- Uncaught exception / unhandled rejection
+- Service shutdown (SIGTERM/SIGINT)
+- Opsional: service start (`OPS_ALERT_NOTIFY_STARTUP=true`)
+
+Pastikan minimal satu akun ADMIN sudah link Telegram (Profile).
 
 Set Telegram webhook setelah deploy:
 

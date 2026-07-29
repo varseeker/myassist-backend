@@ -4,9 +4,11 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Injectable,
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { OpsAlertService } from '../../ops-alert/ops-alert.service';
 
 const STATUS_HINTS: Partial<Record<number, string>> = {
   [HttpStatus.BAD_REQUEST]:
@@ -28,8 +30,11 @@ const STATUS_HINTS: Partial<Record<number, string>> = {
 };
 
 @Catch()
+@Injectable()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
+
+  constructor(private readonly opsAlert: OpsAlertService) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -39,6 +44,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = STATUS_HINTS[HttpStatus.INTERNAL_SERVER_ERROR] as string;
     let errors: string[] | undefined;
+    let stack: string | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -76,15 +82,28 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof Error) {
       this.logger.error(exception.message, exception.stack);
       message = `Kesalahan server: ${exception.message}`;
+      stack = exception.stack;
     }
 
-    response.status(status).json({
-      success: false,
-      statusCode: status,
-      message,
-      errors,
-      path: request.url,
-      timestamp: new Date().toISOString(),
-    });
+    if (!response.headersSent) {
+      response.status(status).json({
+        success: false,
+        statusCode: status,
+        message,
+        errors,
+        path: request.url,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (status >= 500) {
+      void this.opsAlert.alertHttpError({
+        status,
+        method: request.method,
+        path: request.originalUrl || request.url,
+        message,
+        stack,
+      });
+    }
   }
 }
