@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
-import { RoleType } from '@prisma/client';
+import { Prisma, RoleType } from '@prisma/client';
 import { createPrismaClient } from '../src/prisma/create-prisma-client';
+import { HOMEPAGE_SECTION_DEFAULTS } from '../src/homepage/homepage-defaults';
 
 const prisma = createPrismaClient(process.env.DIRECT_URL ?? process.env.DATABASE_URL);
 
@@ -188,6 +189,25 @@ async function main() {
   }
 
   console.log('Seeded clients:', clients.map((c) => c.name).join(', '));
+
+  for (const section of HOMEPAGE_SECTION_DEFAULTS) {
+    await prisma.homepageSection.upsert({
+      where: { key: section.key },
+      update: {},
+      create: {
+        key: section.key,
+        label: section.label,
+        sortOrder: section.sortOrder,
+        isVisible: true,
+        content: section.content as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  console.log(
+    'Seeded homepage sections:',
+    HOMEPAGE_SECTION_DEFAULTS.map((s) => s.key).join(', '),
+  );
 }
 
 main()

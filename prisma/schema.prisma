@@ -352,3 +352,27 @@ model Client {
   @@index([isActive, sortOrder])
   @@map("clients")
 }
+
+enum HomepageSectionKey {
+  HERO
+  HIGHLIGHTS
+  FEATURES
+  PROJECTS
+  WORKFLOW
+  CLIENTS
+  CTA
+}
+
+model HomepageSection {
+  id        String             @id @default(uuid()) @db.Uuid
+  key       HomepageSectionKey @unique
+  label     String
+  sortOrder Int                @default(0) @map("sort_order")
+  isVisible Boolean            @default(true) @map("is_visible")
+  content   Json
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  @@index([isVisible, sortOrder])
+  @@map("homepage_sections")
+}

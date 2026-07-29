@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { ClientsModule } from './clients/clients.module';
 import { CommentsModule } from './comments/comments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { HomepageModule } from './homepage/homepage.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { RealtimeModule } from './realtime/realtime.module';
@@ -37,6 +38,7 @@ import { UsersModule } from './users/users.module';
     RolesModule,
     ProjectsModule,
     ClientsModule,
+    HomepageModule,
     TicketsModule,
     CommentsModule,
     AttachmentsModule,
