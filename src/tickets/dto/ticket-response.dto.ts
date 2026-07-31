@@ -57,6 +57,9 @@ export class TicketResponseDto {
   @ApiProperty()
   description!: string;
 
+  @ApiPropertyOptional({ nullable: true, type: String })
+  menuUrl?: string | null;
+
   @ApiProperty({ enum: TicketType })
   type!: TicketType;
 

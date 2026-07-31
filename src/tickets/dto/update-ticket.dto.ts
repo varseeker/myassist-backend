@@ -7,9 +7,11 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsUrl,
   IsUUID,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateTicketDto {
@@ -24,6 +26,19 @@ export class UpdateTicketDto {
   @IsString()
   @MinLength(10)
   description?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://app.example.com/orders',
+    description: 'URL of the related menu / page',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => typeof value === 'string' && value.trim().length > 0)
+  @IsUrl(
+    { require_protocol: true },
+    { message: 'menuUrl must be a valid URL (http:// or https://)' },
+  )
+  @MaxLength(500)
+  menuUrl?: string | null;
 
   @ApiPropertyOptional({ enum: TicketType })
   @IsOptional()

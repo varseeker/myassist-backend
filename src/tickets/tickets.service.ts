@@ -164,6 +164,7 @@ export class TicketsService {
           ticketNumber,
           title: dto.title.trim(),
           description: dto.description.trim(),
+          menuUrl: dto.menuUrl?.trim() || null,
           type: dto.type ?? TicketType.ISSUE_REPORT,
           priority: dto.priority ?? TicketPriority.MEDIUM,
           status: isUserSubmission ? TicketStatus.USER_INPUT : TicketStatus.OPEN,
@@ -213,6 +214,10 @@ export class TicketsService {
 
     if (dto.description !== undefined) {
       data.description = dto.description.trim();
+    }
+
+    if (dto.menuUrl !== undefined) {
+      data.menuUrl = dto.menuUrl?.trim() || null;
     }
 
     if (dto.type !== undefined) {
@@ -814,6 +819,7 @@ export class TicketsService {
       sprint: ticket.sprint?.name ?? '',
       tipe: ticket.type,
       status: ticket.status,
+      menuUrl: ticket.menuUrl ?? '',
       deskripsi: ticket.description,
       reporter: ticket.createdBy.fullName,
       assignee: ticket.assignedTo?.fullName ?? '',
@@ -838,6 +844,7 @@ export class TicketsService {
         { header: 'Sprint', key: 'sprint', width: 16 },
         { header: 'Tipe', key: 'tipe', width: 18 },
         { header: 'Status', key: 'status', width: 18 },
+        { header: 'URL Menu', key: 'menuUrl', width: 36 },
         { header: 'Deskripsi', key: 'deskripsi', width: 40 },
         { header: 'Reporter', key: 'reporter', width: 20 },
         { header: 'Assignee', key: 'assignee', width: 20 },
@@ -864,6 +871,7 @@ export class TicketsService {
       'Sprint',
       'Tipe',
       'Status',
+      'URL Menu',
       'Deskripsi',
       'Reporter',
       'Assignee',
@@ -882,6 +890,7 @@ export class TicketsService {
           row.sprint,
           row.tipe,
           row.status,
+          row.menuUrl,
           row.deskripsi,
           row.reporter,
           row.assignee,
@@ -1230,6 +1239,7 @@ export class TicketsService {
       ticketNumber: ticket.ticketNumber,
       title: ticket.title,
       description: ticket.description,
+      menuUrl: ticket.menuUrl,
       type: ticket.type,
       status: ticket.status,
       priority: ticket.priority,

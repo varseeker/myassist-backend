@@ -9,9 +9,11 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   IsUUID,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 function emptyToUndefined({ value }: { value: unknown }) {
@@ -30,6 +32,20 @@ export class CreateTicketDto {
   @IsNotEmpty()
   @MinLength(10)
   description!: string;
+
+  @ApiPropertyOptional({
+    example: 'https://app.example.com/orders',
+    description: 'URL of the related menu / page',
+  })
+  @Transform(emptyToUndefined)
+  @IsOptional()
+  @ValidateIf((_, value) => typeof value === 'string' && value.trim().length > 0)
+  @IsUrl(
+    { require_protocol: true },
+    { message: 'menuUrl must be a valid URL (http:// or https://)' },
+  )
+  @MaxLength(500)
+  menuUrl?: string;
 
   @ApiPropertyOptional({ enum: TicketType, default: TicketType.ISSUE_REPORT })
   @Transform(emptyToUndefined)

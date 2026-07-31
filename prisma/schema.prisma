@@ -149,6 +149,7 @@ model Ticket {
   ticketNumber String         @unique @map("ticket_number")
   title        String
   description  String         @db.Text
+  menuUrl      String?        @map("menu_url") @db.VarChar(500)
   type         TicketType
   status       TicketStatus   @default(OPEN)
   priority     TicketPriority @default(MEDIUM)
